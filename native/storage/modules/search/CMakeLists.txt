@@ -1,4 +1,4 @@
-﻿# waydirect_storage_search â€” file name/content search helpers
+# waydirect_storage_search â€” file name/content search helpers
 add_library(waydirect_storage_search STATIC
     src/file_search.cpp
     src/collect_data.c

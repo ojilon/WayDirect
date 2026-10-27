@@ -1,4 +1,4 @@
-﻿# storage/modules/search
+# storage/modules/search
 
 **Target:** `WayDirect_storage_search` (STATIC)
 

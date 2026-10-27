@@ -1,4 +1,4 @@
-﻿#ifndef WAYDIRECT_ANDROID_FS_H
+#ifndef WAYDIRECT_ANDROID_FS_H
 #define WAYDIRECT_ANDROID_FS_H
 
 #include <stddef.h>

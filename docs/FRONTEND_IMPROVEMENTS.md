@@ -1,4 +1,4 @@
-﻿# Frontend improvements â€” October 2025 Material 3 pass
+# Frontend improvements â€” October 2025 Material 3 pass
 
 > **Why** the previous UI felt cramped: every surface was a `MaterialCardView` with `16dp` corners and `1dp` `WayDirect_outline_glass` stroke, so cards read as chunky glass buttons; the bottom bar was a hand-rolled `HorizontalScrollView + MaterialButtonToggleGroup` (because `BottomNavigationView` crashed at 5 items) with `120dp` fixed buttons, left-aligned so position 0 was half off-screen on narrow phones; all nav icons were the same folder vector; quick actions had no icons; empty states were bare text.
 

@@ -1,4 +1,4 @@
-﻿# waydirect_shim â€” C++ shim layer exposing extern "C" WayDirect_* symbols for the Odin router.
+# waydirect_shim â€” C++ shim layer exposing extern "C" WayDirect_* symbols for the Odin router.
 # Each function is a one-line wrapper over the existing C++ domain module.
 add_library(waydirect_shim STATIC waydirect_shim.cpp)
 

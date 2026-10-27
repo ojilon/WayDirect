@@ -1,4 +1,4 @@
-﻿# Testing & CI
+# Testing & CI
 
 ## Run unit tests (local)
 

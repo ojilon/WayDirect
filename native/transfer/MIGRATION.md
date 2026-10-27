@@ -1,4 +1,4 @@
-﻿# transfer â€” migration & improvements
+# transfer â€” migration & improvements
 
 **CMake target:** `WayDirect_transfer`  
 **Depends on:** `WayDirect_core`, `WayDirect_storage` (paths, staging under temp/)

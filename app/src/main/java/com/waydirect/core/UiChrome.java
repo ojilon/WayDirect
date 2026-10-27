@@ -1,4 +1,4 @@
-﻿package com.waydirect.core;
+package com.waydirect.core;
 
 import android.app.Activity;
 import android.os.Build;

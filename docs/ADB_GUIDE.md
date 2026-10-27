@@ -1,4 +1,4 @@
-﻿# ADB guide: install, logcat, inspect (WayDirect)
+# ADB guide: install, logcat, inspect (WayDirect)
 
 All commands run from the repo root on your PC. `adb` lives at
 `<sdk>/platform-tools/adb` â€” replace `<sdk>` with your Android SDK path

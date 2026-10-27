@@ -1,4 +1,4 @@
-﻿# media â€” migration & improvements
+# media â€” migration & improvements
 
 **CMake target:** `WayDirect_media`  
 **Status:** placeholder only â€” no legacy sources yet.

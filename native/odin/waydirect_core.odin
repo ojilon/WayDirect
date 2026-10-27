@@ -1,4 +1,4 @@
-﻿// =============================================================================
+// =============================================================================
 // waydirect_core.odin â€” Odin entry package (the only package CMake builds)
 //
 // This is the package that `native/CMakeLists.txt` asks the Odin compiler to

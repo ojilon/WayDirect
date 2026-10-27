@@ -1,4 +1,4 @@
-﻿# Transfer + Cleaner rework (step by step)
+# Transfer + Cleaner rework (step by step)
 
 Follows `docs/BRIDGE_PLAN.md` (file-backed bridge) â€” this file plans the UI
 and feature side. Order below is build order: Cleaner + Transfer first,

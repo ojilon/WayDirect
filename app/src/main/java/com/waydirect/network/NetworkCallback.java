@@ -1,4 +1,4 @@
-﻿// File path: com/example/WayDirect/network/NetworkCallback.java
+// File path: com/example/WayDirect/network/NetworkCallback.java
 package com.waydirect.network;
 
 /**

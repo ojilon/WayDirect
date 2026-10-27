@@ -1,4 +1,4 @@
-﻿# waydirect_preview â€” read-only document/text preview for the in-app viewer (no JNI)
+# waydirect_preview â€” read-only document/text preview for the in-app viewer (no JNI)
 
 add_library(waydirect_preview STATIC
     src/preview.cpp

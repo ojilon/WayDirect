@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <!--
   Glass panel â€” only for optional blur mode (not default card).
   Default cards use Widget.WayDirect.Card (solid + elevation) now.

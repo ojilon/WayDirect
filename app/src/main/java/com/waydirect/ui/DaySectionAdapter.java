@@ -1,4 +1,4 @@
-﻿package com.waydirect.ui;
+package com.waydirect.ui;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;

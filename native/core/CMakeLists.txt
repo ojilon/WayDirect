@@ -1,4 +1,4 @@
-﻿# waydirect_core â€” shared foundation (no domain logic, no JNI)
+# waydirect_core â€” shared foundation (no domain logic, no JNI)
 
 add_library(waydirect_core STATIC
     src/json_util.cpp

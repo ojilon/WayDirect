@@ -1,4 +1,4 @@
-﻿# Native overview â€” Odin October 2025 sweep Â· Android 10 target
+# Native overview â€” Odin October 2025 sweep Â· Android 10 target
 
 > **Branch** `arena/e58556e6-WayDirect` (off `3db8fbc fix`).  
 > **Toolchain** Odin `dev-2025-10` + NDK 29.x + CMake 3.22.1, ABI `arm64-v8a` only.  

@@ -1,4 +1,4 @@
-﻿package com.waydirect.bridge;
+package com.waydirect.bridge;
 
 import android.content.Context;
 import android.os.Environment;

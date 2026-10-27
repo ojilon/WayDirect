@@ -1,4 +1,4 @@
-﻿# WayDirect â€” Storage Subsystem: Open Flags & Decisions
+# WayDirect â€” Storage Subsystem: Open Flags & Decisions
 
 Running log of unresolved gaps, deliberate simplifications, and decisions
 that were made for now but may need revisiting. Update this file whenever

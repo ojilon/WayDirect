@@ -1,4 +1,4 @@
-﻿# waydirect_storage_organizer â€” plan/apply file organization
+# waydirect_storage_organizer â€” plan/apply file organization
 add_library(waydirect_storage_organizer STATIC
     src/file_organizer.cpp
 )

@@ -1,4 +1,4 @@
-﻿# waydirect_storage_cleaner â€” duplicates, large files, future junk cleanup
+# waydirect_storage_cleaner â€” duplicates, large files, future junk cleanup
 add_library(waydirect_storage_cleaner STATIC
     src/duplicate_finder.cpp
     src/large_files.cpp

@@ -1,4 +1,4 @@
-﻿# preview â€” read-only document/text preview
+# preview â€” read-only document/text preview
 
 **CMake target:** `WayDirect_preview`
 **Depends on:** `WayDirect_core` only (json helpers)

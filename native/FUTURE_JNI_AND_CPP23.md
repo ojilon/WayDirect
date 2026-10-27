@@ -1,4 +1,4 @@
-﻿# Future JNI boundary & C++23 (WayDirect native)
+# Future JNI boundary & C++23 (WayDirect native)
 
 Notes for improving the Java â†” C++ relationship without a big-bang rewrite.
 

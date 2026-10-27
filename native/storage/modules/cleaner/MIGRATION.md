@@ -1,4 +1,4 @@
-﻿# storage/modules/cleaner
+# storage/modules/cleaner
 
 **Target:** `WayDirect_storage_cleaner` (STATIC)
 

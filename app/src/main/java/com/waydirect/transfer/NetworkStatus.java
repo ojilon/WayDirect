@@ -1,4 +1,4 @@
-﻿package com.waydirect.transfer;
+package com.waydirect.transfer;
 
 public class NetworkStatus {
     private final String status;

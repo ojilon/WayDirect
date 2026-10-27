@@ -1,4 +1,4 @@
-﻿# jni â€” migration & improvements
+# jni â€” migration & improvements
 
 **CMake target:** `WayDirect_engine` (SHARED â†’ `libWayDirect_engine.so`)  
 **Depends on:** all domain static libs  

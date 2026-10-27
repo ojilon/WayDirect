@@ -1,4 +1,4 @@
-﻿// File path: com/example/WayDirect/utils/TextSanitizer.java
+// File path: com/example/WayDirect/utils/TextSanitizer.java
 package com.waydirect.utils;
 
 /**

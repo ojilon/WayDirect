@@ -1,4 +1,4 @@
-﻿# Bridge plan: file-backed Java â†” C++ (step by step)
+# Bridge plan: file-backed Java â†” C++ (step by step)
 
 Status: plan only â€” implemented one step at a time, each verified on device.
 Vision owner: you. This file is the shared checklist; check boxes as we land steps.

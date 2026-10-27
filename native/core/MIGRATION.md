@@ -1,4 +1,4 @@
-﻿# core â€” migration & improvements
+# core â€” migration & improvements
 
 **CMake target:** `WayDirect_core`  
 **Depends on:** nothing domain-specific  

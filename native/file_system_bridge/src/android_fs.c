@@ -1,4 +1,4 @@
-﻿/*
+/*
  * android_fs.c â€” bionic-safe FS for Odin (Android 10+).
  * Only opendir/readdir/stat/open/read/write/mkdir/rename/unlink.
  * Never statx.

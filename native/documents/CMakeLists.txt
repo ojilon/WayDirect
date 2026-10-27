@@ -1,4 +1,4 @@
-﻿# waydirect_documents â€” document filter / future render hooks (no JNI)
+# waydirect_documents â€” document filter / future render hooks (no JNI)
 
 add_library(waydirect_documents STATIC
     src/document_engine.cpp

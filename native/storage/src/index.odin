@@ -1,4 +1,4 @@
-﻿// =============================================================================
+// =============================================================================
 // index.odin â€” file-backed index bridge (thin Odin wrapper over index_c.c)
 //
 // Part of package storage. The heavy lifting (walk â†’ JSON spill, search via

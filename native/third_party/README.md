@@ -1,4 +1,4 @@
-﻿# native/third_party
+# native/third_party
 
 Place **external C++ libraries** here (headers + static/shared libs).
 

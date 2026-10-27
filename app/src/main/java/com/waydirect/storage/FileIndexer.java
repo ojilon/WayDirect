@@ -1,4 +1,4 @@
-﻿// File path: com/example/WayDirect/storage/FileIndexer.java
+// File path: com/example/WayDirect/storage/FileIndexer.java
 package com.waydirect.storage;
 
 import com.waydirect.bridge.AppDirs;

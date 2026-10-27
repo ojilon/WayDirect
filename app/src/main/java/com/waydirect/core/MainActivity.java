@@ -1,4 +1,4 @@
-﻿package com.waydirect.core;
+package com.waydirect.core;
 
 import android.Manifest;
 import android.content.pm.PackageManager;

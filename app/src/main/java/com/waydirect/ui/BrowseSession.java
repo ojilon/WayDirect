@@ -1,4 +1,4 @@
-﻿package com.waydirect.ui;
+package com.waydirect.ui;
 
 /**
  * B4/C1 of docs/TRANSFER_CLEANER_PLAN.md: where browsing left off.

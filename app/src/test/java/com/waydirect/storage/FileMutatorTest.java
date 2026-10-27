@@ -1,4 +1,4 @@
-﻿package com.waydirect.storage;
+package com.waydirect.storage;
 
 import org.junit.After;
 import org.junit.Before;

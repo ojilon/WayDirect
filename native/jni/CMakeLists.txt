@@ -1,4 +1,4 @@
-﻿# =============================================================================
+# =============================================================================
 # jni/CMakeLists.txt â€” the only shared library Android actually loads
 #
 # waydirect_engine.c is a tiny C trampoline:

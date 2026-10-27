@@ -1,4 +1,4 @@
-﻿package com.waydirect.storage;
+package com.waydirect.storage;
 
 public class StorageItem {
     private final String name;

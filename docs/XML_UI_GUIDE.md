@@ -1,4 +1,4 @@
-﻿# Learning XML UI in WayDirect â€” updated Oct 2025
+# Learning XML UI in WayDirect â€” updated Oct 2025
 
 How layouts in this project are structured after the Material 3 refresh, so you can improve them confidently.
 

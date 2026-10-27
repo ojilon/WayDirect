@@ -1,4 +1,4 @@
-﻿# waydirect_transfer â€” protocol helpers, listener hooks (no full Java NetworkManager replacement)
+# waydirect_transfer â€” protocol helpers, listener hooks (no full Java NetworkManager replacement)
 
 add_library(waydirect_transfer STATIC
     src/transfer_engine.cpp

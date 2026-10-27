@@ -1,4 +1,4 @@
-﻿// File path: com/example/WayDirect/core/Config.java
+// File path: com/example/WayDirect/core/Config.java
 package com.waydirect.core;
 
 /**

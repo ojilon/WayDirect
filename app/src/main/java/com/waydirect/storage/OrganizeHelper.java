@@ -1,4 +1,4 @@
-﻿// OrganizeHelper.java â€” keeps this logic out of the fragment
+// OrganizeHelper.java â€” keeps this logic out of the fragment
 package com.waydirect.storage;
 
 import android.content.Context;

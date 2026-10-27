@@ -1,4 +1,4 @@
-﻿# waydirect_media â€” placeholder for audio/video metadata / helpers (future)
+# waydirect_media â€” placeholder for audio/video metadata / helpers (future)
 
 add_library(waydirect_media STATIC
     src/media_placeholder.cpp

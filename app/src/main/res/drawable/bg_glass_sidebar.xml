@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <!-- Sidebar background â€” solid surface with subtle top border, not full glass -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">

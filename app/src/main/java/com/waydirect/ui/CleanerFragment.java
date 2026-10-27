@@ -1,4 +1,4 @@
-﻿// CleanerFragment.java â€” home of the file-cleaner utilities.
+// CleanerFragment.java â€” home of the file-cleaner utilities.
 // Today it hosts the duplicates scan directly; per TRANSFER_CLEANER_PLAN.md
 // it grows a card grid + sideways utility tabs (duplicates first).
 package com.waydirect.ui;

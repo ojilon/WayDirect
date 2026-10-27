@@ -1,4 +1,4 @@
-﻿/*
+/*
  * index_c.c â€” file-backed index + search + group-by-day (C only).
  * Uses opendir/readdir/stat only (Android 10 seccomp safe â€” no statx).
  *

@@ -1,4 +1,4 @@
-﻿// =============================================================================
+// =============================================================================
 // fs_android.odin â€” bionic-safe filesystem bridge for Odin
 //
 // Part of package storage (imported by all storage submodules). This file is

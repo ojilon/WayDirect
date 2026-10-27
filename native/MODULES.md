@@ -1,4 +1,4 @@
-﻿# Native modular layout (agent guide) â€” updated Oct 2025 for Odin
+# Native modular layout (agent guide) â€” updated Oct 2025 for Odin
 
 Branch: `arena/e58556e6-WayDirect` (off `main`) Â· Odin `dev-2025-10` Â· target Android 10 (API 29).
 

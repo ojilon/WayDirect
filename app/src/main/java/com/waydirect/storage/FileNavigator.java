@@ -1,4 +1,4 @@
-﻿// File path: com/example/WayDirect/storage/FileNavigator.java
+// File path: com/example/WayDirect/storage/FileNavigator.java
 package com.waydirect.storage;
 
 import android.os.Environment;

@@ -1,4 +1,4 @@
-﻿# documents â€” migration & improvements
+# documents â€” migration & improvements
 
 **CMake target:** `WayDirect_documents`  
 **Depends on:** `WayDirect_core`, `WayDirect_storage` (for paths / listing as needed)

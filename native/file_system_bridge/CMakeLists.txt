@@ -1,4 +1,4 @@
-﻿# waydirect_documents â€” document filter / future render hooks (no JNI)
+# waydirect_documents â€” document filter / future render hooks (no JNI)
 
 add_library(waydirect_file_system STATIC
     src/android_fs.c

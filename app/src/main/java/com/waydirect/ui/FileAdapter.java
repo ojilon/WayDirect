@@ -1,4 +1,4 @@
-﻿package com.waydirect.ui;
+package com.waydirect.ui;
 
 import android.view.LayoutInflater;
 import android.view.View;

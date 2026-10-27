@@ -1,4 +1,4 @@
-﻿package com.waydirect.transfer;
+package com.waydirect.transfer;
 
 import com.waydirect.bridge.NativeEngine;
 import org.json.JSONObject;

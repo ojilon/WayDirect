@@ -1,4 +1,4 @@
-﻿package com.waydirect.transfer;
+package com.waydirect.transfer;
 
 import android.content.Context;
 import com.waydirect.bridge.PathRegistry;

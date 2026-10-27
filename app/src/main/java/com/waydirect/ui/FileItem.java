@@ -1,4 +1,4 @@
-﻿package com.waydirect.ui;
+package com.waydirect.ui;
 
 /**
  * Simple data class for one row in the Files list / search results.

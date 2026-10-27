@@ -1,4 +1,4 @@
-﻿# Media & document viewers
+# Media & document viewers
 
 How opening a file chooses a full-window Activity, and how C++ / third_party fits later.
 

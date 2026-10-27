@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 
 <!-- Square utility card for the Cleaner grid. Height derives from the column
      width via the 1:1 ratio, so cards stay square on any screen. -->

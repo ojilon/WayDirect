@@ -1,4 +1,4 @@
-﻿# WayDirect (Android) â€” Odin + C wrappers + Material 3 Â· October 2025
+# WayDirect (Android) â€” Odin + C wrappers + Material 3 Â· October 2025
 
 Android client for browsing local storage and transferring files with **WayDirectPC** over a phone hotspot. This branch (`arena/e58556e6-WayDirect`) is the **October 2025 Odin rewrite**: native logic in Odin (`native/*/src/*.odin`) with bionic-safe C wrappers (`native/core/src/android_fs.c`, `index_c.c`), targeting **Android 10 (API 29)**.
 

@@ -1,4 +1,4 @@
-﻿// File path: com/example/WayDirect/storage/FolderSkipController.java
+// File path: com/example/WayDirect/storage/FolderSkipController.java
 package com.waydirect.storage;
 
 import java.io.File;

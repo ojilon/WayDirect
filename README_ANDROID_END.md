@@ -1,4 +1,4 @@
-﻿# WayDirect â€” Android end (detailed)
+# WayDirect â€” Android end (detailed)
 
 Android app for local file management and transfers with **WayDirectPC** over hotspot.
 

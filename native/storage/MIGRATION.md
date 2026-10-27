@@ -1,4 +1,4 @@
-﻿# storage â€” migration & improvements
+# storage â€” migration & improvements
 
 **CMake target:** `WayDirect_storage`  
 **Depends on:** `WayDirect_core`  

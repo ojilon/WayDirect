@@ -1,4 +1,4 @@
-﻿// File path: com/example/WayDirect/storage/FileSearcher.java
+// File path: com/example/WayDirect/storage/FileSearcher.java
 package com.waydirect.storage;
 
 import java.io.File;

@@ -1,4 +1,4 @@
-﻿package com.waydirect.utils;
+package com.waydirect.utils;
 
 import org.junit.Test;
 

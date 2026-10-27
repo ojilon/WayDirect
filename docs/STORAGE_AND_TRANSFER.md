@@ -1,4 +1,4 @@
-﻿# Storage, Transfer & shared file operations
+# Storage, Transfer & shared file operations
 
 Guide for the Storage tab, Transfer tab, and the shared `FileMutator` used across the app.
 

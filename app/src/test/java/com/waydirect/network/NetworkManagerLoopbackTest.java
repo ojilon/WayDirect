@@ -1,4 +1,4 @@
-﻿package com.waydirect.network;
+package com.waydirect.network;
 
 import org.junit.Rule;
 import org.junit.Test;
