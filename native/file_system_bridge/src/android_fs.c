@@ -69,7 +69,7 @@ WaydirectFsDir *fs_opendir(const char *path) {
     return d;
 }
 
-int fs_readdir(WaydirectFsDir *d, WayDirectFsEntry *out) {
+int fs_readdir(WaydirectFsDir *d, WaydirectFsEntry *out) {
     if (!d || !d->dp || !out) return 0;
     for (;;) {
         struct dirent *ent = readdir(d->dp);
@@ -110,7 +110,7 @@ void fs_closedir(WaydirectFsDir *d) {
 }
 
 /* Recursive walk helper */
-static void walk_rec(const char *dir, unsigned depth, WayDirectFsFileCb cb, void *ud) {
+static void walk_rec(const char *dir, unsigned depth, WaydirectFsFileCb cb, void *ud) {
     if (depth > WAYDIRECT_MAX_DEPTH) return;
     DIR *dp = opendir(dir);
     if (!dp) return;
@@ -139,7 +139,7 @@ static void walk_rec(const char *dir, unsigned depth, WayDirectFsFileCb cb, void
     closedir(dp);
 }
 
-int fs_walk_files(const char *root, WayDirectFsFileCb cb, void *ud) {
+int fs_walk_files(const char *root, WaydirectFsFileCb cb, void *ud) {
     if (!root || !cb) return 0;
     walk_rec(root, 0, cb, ud);
     return 1; /* walk started successfully */
