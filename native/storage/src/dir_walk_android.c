@@ -10,20 +10,20 @@
 #include <sys/stat.h>
 #include <limits.h>
 
-struct WayerDir {
+struct WaydirectDir {
     DIR  *dp;
     char  path_prefix[PATH_MAX];  /* "parent/" for building child paths */
     size_t path_prefix_len;
     char  name_buf[256];          /* last entry name (for Odin pointer) */
 };
 
-WayerDir *wayer_dir_open(const char *path) {
+WaydirectDir *dir_open(const char *path) {
     if (!path || !path[0]) return NULL;
 
     DIR *dp = opendir(path);
     if (!dp) return NULL;
 
-    WayerDir *d = (WayerDir *)calloc(1, sizeof(WayerDir));
+    WaydirectDir *d = (WaydirectDir *)calloc(1, sizeof(WaydirectDir));
     if (!d) {
         closedir(dp);
         return NULL;
@@ -48,7 +48,7 @@ WayerDir *wayer_dir_open(const char *path) {
     return d;
 }
 
-int wayer_dir_next(WayerDir *dir, WayerDirEntry *out) {
+int dir_next(WaydirectDir *dir, WaydirectDirEntry *out) {
     if (!dir || !dir->dp || !out) return 0;
 
     for (;;) {
@@ -92,7 +92,7 @@ int wayer_dir_next(WayerDir *dir, WayerDirEntry *out) {
     }
 }
 
-void wayer_dir_close(WayerDir *dir) {
+void dir_close(WaydirectDir *dir) {
     if (!dir) return;
     if (dir->dp) closedir(dir->dp);
     free(dir);
