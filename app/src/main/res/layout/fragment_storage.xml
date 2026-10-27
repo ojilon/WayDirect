@@ -82,7 +82,7 @@
                             android:padding="@dimen/spacing_md"
                             android:gravity="center_horizontal">
                         
-                            <com.example.WayDirect.ui.StorageRingView
+                            <com.waydirect.ui.StorageRingView
                                 android:id="@+id/storage_ring"
                                 android:layout_width="160dp"
                                 android:layout_height="160dp"

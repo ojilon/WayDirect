@@ -582,7 +582,7 @@ public class TransferFragment extends Fragment {
                 binding.connectionStatus.setText(finalMessage);
                 binding.connectionStatus.setTextColor(
                         getResources().getColor(
-                                finalOk ? R.color.WayDirect_success : R.color.WayDirect_error, null));
+                                finalOk ? R.color.waydirect_success : R.color.waydirect_error, null));
                 appendLog(finalMessage);
             });
         }).start();

@@ -31,15 +31,15 @@ public class StorageRingView extends View {
         arcPaint.setStyle(Paint.Style.STROKE);
         arcPaint.setStrokeCap(Paint.Cap.BUTT);
         holePaint.setStyle(Paint.Style.FILL);
-        holePaint.setColor(ContextCompat.getColor(context, R.color.WayDirect_surface));
+        holePaint.setColor(ContextCompat.getColor(context, R.color.waydirect_surface));
 
         colors = new int[] {
-                ContextCompat.getColor(context, R.color.WayDirect_cat_images),
-                ContextCompat.getColor(context, R.color.WayDirect_cat_videos),
-                ContextCompat.getColor(context, R.color.WayDirect_cat_audio),
-                ContextCompat.getColor(context, R.color.WayDirect_cat_documents),
-                ContextCompat.getColor(context, R.color.WayDirect_cat_system),
-                ContextCompat.getColor(context, R.color.WayDirect_cat_others),
+                ContextCompat.getColor(context, R.color.waydirect_cat_images),
+                ContextCompat.getColor(context, R.color.waydirect_cat_videos),
+                ContextCompat.getColor(context, R.color.waydirect_cat_audio),
+                ContextCompat.getColor(context, R.color.waydirect_cat_documents),
+                ContextCompat.getColor(context, R.color.waydirect_cat_system),
+                ContextCompat.getColor(context, R.color.waydirect_cat_others),
         };
     }
 
@@ -69,7 +69,7 @@ public class StorageRingView extends View {
         long sum = 0;
         for (long v : values) sum += v;
         if (sum <= 0) {
-            arcPaint.setColor(ContextCompat.getColor(getContext(), R.color.WayDirect_outline_glass));
+            arcPaint.setColor(ContextCompat.getColor(getContext(), R.color.waydirect_outline_glass));
             canvas.drawArc(oval, -90f, 360f, false, arcPaint);
             return;
         }

@@ -26,7 +26,7 @@ public final class UiChrome {
 
         boolean light = ThemePrefs.isLightUi(activity);
 
-        int bg = activity.getResources().getColor(R.color.WayDirect_background, activity.getTheme());
+        int bg = activity.getResources().getColor(R.color.waydirect_background, activity.getTheme());
         window.setStatusBarColor(bg);
         window.setNavigationBarColor(bg);
 
