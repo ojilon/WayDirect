@@ -288,12 +288,12 @@ dispatch_action :: proc(action_id: int, payload: string) -> cstring {
 		if len(parts) < 2 || len(parts[0]) == 0 || len(parts[1]) == 0 {
 			return reply(BAD_PAYLOAD)
 		}
-		return reply_c(build_index(cs(parts[0]), cs(parts[1])))
+		return reply_c(build_index_odin(cs(parts[0]), cs(parts[1])))
 
 	case ACTION_INDEX_META:
 		// payload: index_path (or "" â†’ use default; handled here as bad_payload)
 		if len(payload) == 0 do return reply(BAD_PAYLOAD)
-		return reply_c(index_meta(cs(payload)))
+		return reply_c(index_meta_odin(cs(payload)))
 
 	case ACTION_SEARCH_INDEX:
 		// payload: out_path|index_path|max_results|query
@@ -313,7 +313,7 @@ dispatch_action :: proc(action_id: int, payload: string) -> cstring {
 		if query_from < len(parts) {
 			query = strings.join(parts[query_from:], "|", context.temp_allocator)
 		}
-		return reply_c(search_index_to_file(cs(query), max_results, cs(parts[0]), cs(parts[1])))
+		return reply_c(search_index_to_file_odin(cs(query), max_results, cs(parts[0]), cs(parts[1])))
 
 	case ACTION_READ_TEXT_FILE:
 		path, max_bytes := split_trailing_number(payload, 0)
@@ -339,7 +339,7 @@ dispatch_action :: proc(action_id: int, payload: string) -> cstring {
 		if len(parts) > 3 {
 			if v, ok := strconv.parse_int(parts[3], 10); ok { max_per_day = v }
 		}
-		return reply_c(group_index_by_day(cs(parts[1]), cs(parts[0]), c.int(max_days), c.int(max_per_day)))
+		return reply_c(group_index_by_day_odin(cs(parts[1]), cs(parts[0]), c.int(max_days), c.int(max_per_day)))
 	}
 
 	core_heart.error("waydirectEngine", "unknown action from Java")

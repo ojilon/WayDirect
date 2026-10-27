@@ -22,8 +22,8 @@ foreign import android_fs "system:c"
 
 @(default_calling_convention = "c")
 foreign android_fs {
-	fs_mkdir_p    :: proc(path: cstring) -> c.int --- @(link_name = "fs_mkdir_p")
-	fs_write_file :: proc(path: cstring, data: rawptr, n: c.size_t) -> c.int --- @(link_name = "fs_write_file")
+	fs_mkdir_p    :: proc(path: cstring) -> c.int ---
+	fs_write_file :: proc(path: cstring, data: rawptr, n: c.size_t) -> c.int ---
 }
 
 // ---------------------------------------------------------------------------
