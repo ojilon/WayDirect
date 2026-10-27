@@ -1,22 +1,22 @@
-// =============================================================================
-// walker.odin — shared recursive walk for Storage stats
+﻿// =============================================================================
+// walker.odin â€” shared recursive walk for Storage stats
 //
 // Part of package storage. This is the Odin port of native/storage/src/walker.cpp.
 // It accumulates category totals and per-top-folder sizes in a single walk so
 // analyse_storage_space.odin doesn't need to walk twice.
 //
 // How it works
-//   * Uses the bionic-safe WayerDir API from dir_walk_android.c (opendir/
+//   * Uses the bionic-safe WaydirectDir API from dir_walk_android.c (opendir/
 //     readdir/stat only, no statx) via the foreign block below.
 //   * `Scan.top` is the name of the top-level child we are currently inside;
 //     files directly under the root have top == "" and count toward categories
 //     only, not toward any top folder.
 //   * Excluded directories (see safety.odin) are never descended into.
 //
-// Android 10 / bionic: WayerDir is depth-limited (32) and path-capped (512)
+// Android 10 / bionic: WaydirectDir is depth-limited (32) and path-capped (512)
 // to avoid stack overflow on deep trash hierarchies.
 //
-// Mirrors: wayer::storage::walk_files, Scan in native/storage/src/walker.cpp
+// Mirrors: waydirect::storage::walk_files, Scan in native/storage/src/walker.cpp
 //          analyse_storage_space.cpp uses Scan to build StorageNumbers
 // =============================================================================
 
@@ -26,50 +26,50 @@ import "core:c"
 import "core:strings"
 
 // ---------------------------------------------------------------------------
-// C ABI — dir_walk_android.c (not android_fs.c; separate walker for stats)
+// C ABI â€” dir_walk_android.c (not android_fs.c; separate walker for stats)
 // ---------------------------------------------------------------------------
 
 foreign import walker_c "system:c"
 
 @(default_calling_convention = "c")
 foreign walker_c {
-	wayer_dir_open  :: proc(path: cstring) -> ^WayerDir ---
-	wayer_dir_next  :: proc(dir: ^WayerDir, out: ^WayerDirEntry) -> c.int ---
-	wayer_dir_close :: proc(dir: ^WayerDir) ---
+	dir_open  :: proc(path: cstring) -> ^WaydirectDir ---
+	dir_next  :: proc(dir: ^WaydirectDir, out: ^WaydirectDirEntry) -> c.int ---
+	dir_close :: proc(dir: ^WaydirectDir) ---
 }
 
 // Structs must match dir_walk_android.h
-WayerDirEntry :: struct {
+WaydirectDirEntry :: struct {
 	name:     cstring,
 	name_len: c.size_t,
 	is_dir:   c.int, // 1 dir, 0 file, -1 other
 	size:     i64,
 }
 
-WayerDir :: struct {} // opaque handle
+WaydirectDir :: struct {} // opaque handle
 
 // ---------------------------------------------------------------------------
-// Accumulator — passed by pointer through recursion (replaces C++ lambda capture)
+// Accumulator â€” passed by pointer through recursion (replaces C++ lambda capture)
 // ---------------------------------------------------------------------------
 
 // Scan collects what the walk finds. Passing ^Scan replaces the C++ lambda.
 Scan :: struct {
 	categories: [Category]u64,  // per Category total bytes
-	top_dirs:   map[string]u64, // top-level folder → total bytes
+	top_dirs:   map[string]u64, // top-level folder â†’ total bytes
 }
 
 // scan_dir recursively walks `dir` (full path) and accumulates into `scan`.
 // `top` is the top-level folder name we are inside; "" means root.
 scan_dir :: proc(scan: ^Scan, dir: string, top: string) {
 	c_dir := strings.clone_to_cstring(dir, context.temp_allocator)
-	handle := wayer_dir_open(c_dir)
+	handle := dir_open(c_dir)
 	if handle == nil {
-		return // unreadable — same as old error_code skip
+		return // unreadable â€” same as old error_code skip
 	}
-	defer wayer_dir_close(handle)
+	defer dir_close(handle)
 
-	ent: WayerDirEntry
-	for wayer_dir_next(handle, &ent) != 0 {
+	ent: WaydirectDirEntry
+	for dir_next(handle, &ent) != 0 {
 		// ent.name is cstring with exact name_len
 		name := string(([^]u8)(ent.name)[:ent.name_len])
 
@@ -92,8 +92,8 @@ scan_dir :: proc(scan: ^Scan, dir: string, top: string) {
 
 		if top != "" {
 			// Clone `top` into allocator that outlives this call.
-			// Use temp_allocator (per-JNI call) — safe because the map is
-			// consumed before wayer_core.odin frees temp_allocator.
+			// Use temp_allocator (per-JNI call) â€” safe because the map is
+			// consumed before waydirect_core.odin frees temp_allocator.
 			if top not_in scan.top_dirs {
 				// Need to clone key since `top` string may be temp-allocated
 				// per recursion frame; the map must own its keys.
@@ -108,3 +108,4 @@ scan_dir :: proc(scan: ^Scan, dir: string, top: string) {
 		}
 	}
 }
+
