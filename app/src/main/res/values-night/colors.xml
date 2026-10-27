@@ -1,0 +1,56 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Light theme tokens (used when night mode is OFF) â€” updated Oct 2025.
+
+  Mirrors dark tokens structurally so any layout referencing
+  @color/waydirect_* works in both themes without conditional code.
+  Light surfaces are paper-white with cool grey dividers; brand stays
+  the same blue but text flips to ink for contrast.
+-->
+<resources>
+
+    <!-- Core surfaces -->
+    <color name="waydirect_background">#F5F7FB</color>
+    <color name="waydirect_surface">#FFFFFF</color>
+    <color name="waydirect_surface_solid">#FFFFFF</color>
+    <color name="waydirect_surface_variant">#E8ECF2</color>
+    <color name="waydirect_surface_elevated">#F0F3F8</color>
+    <color name="waydirect_surface_container">#EEF1F6</color>
+    <color name="waydirect_glass">#CCFFFFFF</color>
+    <color name="waydirect_glass_highlight">#40FFFFFF</color>
+
+    <!-- Brand -->
+    <color name="waydirect_primary">#3B5BDB</color>
+    <color name="waydirect_primary_dark">#2B4AC7</color>
+    <color name="waydirect_primary_container">#E0E8FF</color>
+    <color name="waydirect_on_primary">#FFFFFF</color>
+
+    <!-- Text -->
+    <color name="waydirect_text_primary">#1A1D26</color>
+    <color name="waydirect_text_secondary">#5C6575</color>
+    <color name="waydirect_text_disabled">#9AA3B5</color>
+    <color name="waydirect_text_hint">#8A94A8</color>
+
+    <!-- Status -->
+    <color name="waydirect_success">#2E9E6A</color>
+    <color name="waydirect_warning">#C98A12</color>
+    <color name="waydirect_error">#D1434B</color>
+    <color name="waydirect_info">#1A9BB5</color>
+
+    <!-- Borders -->
+    <color name="waydirect_outline">#C5CAD6</color>
+    <color name="waydirect_outline_variant">#E2E6EC</color>
+    <color name="waydirect_outline_glass">#330A0C10</color>
+    <color name="waydirect_divider">#0A1A1D26</color>
+    <color name="waydirect_scrim">#40FFFFFF</color>
+
+    <!-- Category accents â€” slightly deeper for light bg -->
+    <color name="waydirect_cat_images">#E85D3C</color>
+    <color name="waydirect_cat_videos">#1E88E5</color>
+    <color name="waydirect_cat_audio">#8E24AA</color>
+    <color name="waydirect_cat_docs">#43A047</color>
+    <color name="waydirect_cat_others">#607D8B</color>
+    <color name="waydirect_cat_sys">#FF8F00</color>
+
+</resources>
+

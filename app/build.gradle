@@ -1,0 +1,156 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Optional local signing file (never commit real passwords).
+// Create app/keystore.properties from keystore.properties.example
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+android {
+    namespace 'com.waydirect'
+    compileSdk 36
+
+    ndkVersion "29.0.14206865"
+
+    buildFeatures {
+        viewBinding true
+    }
+
+    defaultConfig {
+        applicationId "com.waydirect"
+        minSdk 26
+        targetSdk 34
+
+        // Python tool edits gradle.properties → these read here
+        versionCode project.property("app.versionCode").toInteger()
+        versionName project.property("app.versionName")
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        // Multi-ABI: comma list in gradle.properties → aurora.abiFilters
+        ndk {
+            def abiProperty = project.findProperty("aurora.abiFilters") as String
+            if (abiProperty != null && !abiProperty.trim().isEmpty()) {
+                abiFilters.clear()
+                abiFilters.addAll(abiProperty.split(",").collect { it.trim() }.findAll { !it.isEmpty() })
+            }
+        }
+
+        externalNativeBuild {
+            cmake {
+                cppFlags "-std=c++23"
+                arguments "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+            }
+        }
+    }
+
+    signingConfigs {
+        release {
+            // Prefer keystore.properties; fall back to env vars (CI / Python tool)
+            if (keystorePropertiesFile.exists()) {
+                storeFile file(keystoreProperties["storeFile"])
+                storePassword keystoreProperties["storePassword"]
+                keyAlias keystoreProperties["keyAlias"]
+                keyPassword keystoreProperties["keyPassword"]
+            } else if (System.getenv("WAYDIRECT_STORE_FILE")) {
+                storeFile file(System.getenv("WAYDIRECT_STORE_FILE"))
+                storePassword System.getenv("WAYDIRECT_STORE_PASSWORD")
+                keyAlias System.getenv("WAYDIRECT_KEY_ALIAS")
+                keyPassword System.getenv("WAYDIRECT_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+        }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Only apply signing when a keystore is configured
+            if (keystorePropertiesFile.exists() || System.getenv("WAYDIRECT_STORE_FILE")) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file("../native/CMakeLists.txt")
+            version "3.22.1"
+        }
+    }
+
+    testOptions {
+        unitTests {
+            includeAndroidResources = false
+            returnDefaultValues = true
+        }
+    }
+
+    // One APK with all ABIs listed in aurora.abiFilters (simple for sideload).
+    // For Play Store later you can enable splits / App Bundle.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'androidx.recyclerview:recyclerview:1.3.2'
+
+    testImplementation 'junit:junit:4.13.2'
+
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+}
+
+
+// Copies the freshest NDK compile_commands.json to a stable, gitignored path
+// (repo-root build/) so clangd finds it without digging through app/.cxx
+// hashes (see .clangd). Runs automatically after every native build.
+//
+// NOTE: this must stay a plain task with a doLast + project.copy. The earlier
+// Copy-task version called from() inside doFirst, which configures the copy
+// spec too late — the task "succeeded" while copying nothing.
+tasks.register("copyCompileCommands") {
+    doLast {
+        // NOTE: AGP keeps .cxx next to the module (app/.cxx), not under build/.
+        def cxxDir = file("${projectDir}/.cxx")
+        def dbs = fileTree(cxxDir) { include "**/compile_commands.json" }.files
+        if (dbs.isEmpty()) {
+            throw new GradleException("No compile_commands.json found under ${cxxDir}")
+        }
+        // Prefer the on-device ABI (newest of those); fall back to newest overall.
+        def arm64 = dbs.findAll { it.path.contains("arm64-v8a") }
+        def pool = arm64.isEmpty() ? dbs : arm64
+        def found = pool.max { it.lastModified() }
+        copy {
+            from(found)
+            into(rootProject.file("build"))
+            rename { "compile_commands.json" }
+        }
+        logger.lifecycle("compile_commands.json <- ${found}")
+    }
+}
+
+afterEvaluate {
+    tasks.matching { it.name.startsWith("externalNativeBuild") }.configureEach {
+        finalizedBy "copyCompileCommands"
+    }
+}

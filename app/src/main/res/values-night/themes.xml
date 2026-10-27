@@ -1,0 +1,33 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!-- Light configuration (night resources = light UI in this project). -->
+<resources>
+
+    <style name="Theme.WayDirect" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:statusBarColor">@color/waydirect_background</item>
+        <item name="android:navigationBarColor">@color/waydirect_background</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowBackground">@color/waydirect_background</item>
+
+        <item name="colorPrimary">@color/waydirect_primary</item>
+        <item name="colorOnPrimary">@color/waydirect_on_primary</item>
+        <item name="colorPrimaryContainer">@color/waydirect_primary_container</item>
+        <item name="colorSecondary">@color/waydirect_primary</item>
+
+        <item name="colorSurface">@color/waydirect_surface_solid</item>
+        <item name="colorOnSurface">@color/waydirect_text_primary</item>
+        <item name="colorOnSurfaceVariant">@color/waydirect_text_secondary</item>
+        <item name="colorSurfaceVariant">@color/waydirect_surface_variant</item>
+
+        <item name="colorOutline">@color/waydirect_outline</item>
+        <item name="colorOutlineVariant">@color/waydirect_outline_variant</item>
+        <item name="colorError">@color/waydirect_error</item>
+
+        <item name="android:fontFamily">sans-serif</item>
+
+        <item name="bottomNavigationStyle">@style/Widget.WayDirect.BottomNavigation</item>
+        <item name="materialCardViewStyle">@style/Widget.WayDirect.Card</item>
+    </style>
+
+</resources>
+

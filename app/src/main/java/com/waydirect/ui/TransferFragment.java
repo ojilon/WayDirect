@@ -1,0 +1,908 @@
+﻿package com.waydirect.ui;
+
+import android.os.Bundle;
+import android.view.KeyEvent;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.inputmethod.EditorInfo;
+import android.widget.ArrayAdapter;
+import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
+import androidx.core.view.GravityCompat;
+import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.LinearLayoutManager;
+
+import com.waydirect.R;
+import com.waydirect.bridge.NativeEngine;
+import com.waydirect.bridge.PathCache;
+import com.waydirect.bridge.PathRegistry;
+import com.waydirect.core.Config;
+import com.waydirect.core.GlassBlur;
+import com.waydirect.core.ThemePrefs;
+import com.waydirect.core.UiChrome;
+import com.waydirect.databinding.FragmentTransferBinding;
+import com.waydirect.network.NetworkCallback;
+import com.waydirect.network.NetworkManager;
+import com.waydirect.storage.FileIndexer;
+import com.waydirect.transfer.RecentTransfersStore;
+import com.waydirect.transfer.TransferController;
+import com.waydirect.transfer.TransferQueue;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.File;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+
+public class TransferFragment extends Fragment {
+
+    private FragmentTransferBinding binding;
+
+    private long sessionSentBytes = 0;
+    private long sessionReceivedBytes = 0;
+
+    private String savePath = FileIndexer.getDefaultSavePath();
+    private String browsePath = BrowseSession.transferBrowsePath;
+
+    private FileAdapter browseAdapter;
+    private FileAdapter recentAdapter;
+    private FileAdapter searchAdapter;
+    private FileAdapter sessionAdapter;
+    private volatile boolean queueCancelled = false;
+
+    @Override
+    public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+        binding = FragmentTransferBinding.inflate(inflater, container, false);
+        if (browsePath == null) browsePath = FileIndexer.getDefaultSavePath();
+        setupUI();
+        ensureIndexWarm();
+        return binding.getRoot();
+    }
+
+    private void setupUI() {
+        binding.connectionDetails.setText("Target: " + Config.HOST + ":" + Config.PORT);
+        binding.connectionStatus.setText("Not tested");
+        updateSessionStats();
+        updateSavePathLabel();
+        updateThemeLabel();
+
+        binding.btnTestConnection.setOnClickListener(v -> testConnection());
+        binding.btnStartListener.setOnClickListener(v -> startListener());
+        binding.btnDownload.setOnClickListener(v -> runDownload());
+        binding.btnUpload.setOnClickListener(v -> runUploadSearch());
+
+        binding.btnOpenTransferDrawer.setOnClickListener(v ->
+                binding.transferDrawerLayout.openDrawer(GravityCompat.END));
+
+        binding.btnChangeSave.setOnClickListener(v -> showBrowseTab());
+        binding.btnRefreshIndexer.setOnClickListener(v -> refreshIndexer());
+        binding.btnTheme.setOnClickListener(v -> {
+            String label = ThemePrefs.cycle(requireContext());
+            updateThemeLabel();
+            if (getActivity() != null) UiChrome.apply(getActivity());
+            Toast.makeText(getContext(), "Theme: " + label, Toast.LENGTH_SHORT).show();
+        });
+        binding.btnBlur.setOnClickListener(v -> {
+            if (!GlassBlur.isSupported()) {
+                Toast.makeText(getContext(), "Blur needs Android 12+", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            boolean on = ThemePrefs.toggleBlur(requireContext());
+            GlassBlur.applyFromPrefs(binding.transferSidebarRoot, requireContext());
+            updateThemeLabel();
+            Toast.makeText(getContext(), on ? "Glass blur on" : "Glass blur off", Toast.LENGTH_SHORT).show();
+        });
+        binding.btnBackToTransfer.setOnClickListener(v -> showTransferTab());
+        binding.btnUseThisFolder.setOnClickListener(v -> {
+            savePath = browsePath;
+            updateSavePathLabel();
+            Toast.makeText(getContext(), "Save folder set", Toast.LENGTH_SHORT).show();
+            showTransferTab();
+            binding.transferDrawerLayout.closeDrawer(GravityCompat.END);
+        });
+
+        setupBrowseList();
+        setupSearchTab();
+        setupRecentList();
+        setupSessionList();
+        setupTabs();
+        GlassBlur.applyFromPrefs(binding.transferSidebarRoot, requireContext());
+        binding.transferTabs.check(R.id.tab_transfer);
+    }
+
+    private void setupSessionList() {
+        sessionAdapter = new FileAdapter();
+        binding.sessionQueueList.setLayoutManager(new LinearLayoutManager(requireContext()));
+        binding.sessionQueueList.setAdapter(sessionAdapter);
+        sessionAdapter.setOnItemClickListener(new FileAdapter.OnItemClickListener() {
+            @Override
+            public void onItemClick(FileItem item) {
+                Toast.makeText(getContext(), item.getDetails(), Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onItemLongClick(FileItem item) {
+                // no-op
+            }
+        });
+        binding.btnCancelQueue.setOnClickListener(v -> {
+            queueCancelled = true;
+            Toast.makeText(getContext(), "Finishing current fileâ€¦", Toast.LENGTH_SHORT).show();
+        });
+        renderSessionQueue();
+    }
+
+    /** Session rows straight from the queue file â€” the same file the uploader writes. */
+    private void renderSessionQueue() {
+        if (binding == null) return;
+        List<FileItem> rows = new ArrayList<>();
+        for (TransferQueue.Entry entry : TransferQueue.entries(requireContext())) {
+            File f = new File(entry.path);
+            rows.add(new FileItem(f.getName(), entry.path, entry.status, false, 0));
+        }
+        sessionAdapter.submitList(rows);
+        binding.sessionQueueEmpty.setVisibility(rows.isEmpty() ? View.VISIBLE : View.GONE);
+        binding.sessionQueueList.setVisibility(rows.isEmpty() ? View.GONE : View.VISIBLE);
+    }
+
+    private void setQueueActive(boolean active) {
+        if (binding == null) return;
+        binding.btnCancelQueue.setVisibility(active ? View.VISIBLE : View.GONE);
+    }
+
+    private void setQueueStatus(String text) {
+        if (binding == null) return;
+        binding.sessionQueueStatus.setText(text);
+    }
+    private void setupRecentList() {
+        recentAdapter = new FileAdapter();
+        binding.recentTransfersList.setLayoutManager(new LinearLayoutManager(requireContext()));
+        binding.recentTransfersList.setAdapter(recentAdapter);
+        recentAdapter.setOnItemClickListener(new FileAdapter.OnItemClickListener() {
+            @Override
+            public void onItemClick(FileItem item) {
+                // name only; optional fill filename field
+                binding.transferFilename.setText(item.getName());
+            }
+
+            @Override
+            public void onItemLongClick(FileItem item) {
+                // no-op
+            }
+        });
+        refreshRecentUi();
+    }
+
+    private void refreshRecentUi() {
+        if (binding == null) return;
+        List<RecentTransfersStore.Entry> entries = RecentTransfersStore.load(requireContext());
+        if (entries.isEmpty()) {
+            binding.recentTransfersEmpty.setVisibility(View.VISIBLE);
+            binding.recentTransfersEmpty.setText("No transfers yet");
+            binding.recentTransfersList.setVisibility(View.GONE);
+            recentAdapter.submitList(null);
+            return;
+        }
+        binding.recentTransfersEmpty.setVisibility(View.GONE);
+        binding.recentTransfersList.setVisibility(View.VISIBLE);
+        List<FileItem> items = new ArrayList<>();
+        for (RecentTransfersStore.Entry e : entries) {
+            String details = (e.download ? "Download" : "Upload") + " Â· " + e.detail;
+            items.add(new FileItem(e.name, e.detail, details, false, 0));
+        }
+        recentAdapter.submitList(items);
+    }
+
+    private void recordSuccess(boolean download, String name, String detail) {
+        RecentTransfersStore.add(requireContext(), download, name, detail);
+        refreshRecentUi();
+    }
+
+    private void updateThemeLabel() {
+        if (binding == null) return;
+        binding.themeLabel.setText("Theme: " + ThemePrefs.currentLabel(requireContext()));
+        binding.btnTheme.setText("Cycle theme (" + ThemePrefs.currentLabel(requireContext()) + ")");
+        boolean blur = ThemePrefs.isBlurEnabled(requireContext());
+        String blurTxt = !GlassBlur.isSupported()
+                ? "Glass blur: N/A (API < 31)"
+                : (blur ? "Glass blur: On" : "Glass blur: Off");
+        binding.blurLabel.setText(blurTxt);
+        binding.btnBlur.setText(GlassBlur.isSupported() ? "Toggle glass blur" : "Blur unavailable");
+    }
+
+    private void setupBrowseList() {
+        browseAdapter = new FileAdapter();
+        binding.browseFolderList.setLayoutManager(new LinearLayoutManager(requireContext()));
+        binding.browseFolderList.setAdapter(browseAdapter);
+
+        browseAdapter.setOnItemClickListener(new FileAdapter.OnItemClickListener() {
+            @Override
+            public void onItemClick(FileItem item) {
+                if (item.isDirectory()) {
+                    browsePath = item.getPath();
+                    loadBrowseDirectory(browsePath);
+                }
+            }
+
+            @Override
+            public void onItemLongClick(FileItem item) {
+                if (item.isDirectory()) {
+                    savePath = item.getPath();
+                    updateSavePathLabel();
+                    Toast.makeText(getContext(), "Save folder: " + item.getName(), Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+
+        binding.btnBrowseUp.setOnClickListener(v -> {
+            File parent = new File(browsePath).getParentFile();
+            if (parent != null) {
+                loadBrowseDirectory(parent.getAbsolutePath());
+            } else {
+                Toast.makeText(getContext(), "Already at the top", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        binding.browseFilter.addTextChangedListener(new android.text.TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(android.text.Editable s) {
+                applyBrowseFilter(s != null ? s.toString() : "");
+            }
+        });
+    }
+
+    private final List<FileItem> browseFiles = new ArrayList<>();
+
+    private void applyBrowseFilter(String query) {
+        if (binding == null) return;
+        if (query == null || query.trim().isEmpty()) {
+            browseAdapter.submitList(new ArrayList<>(browseFiles));
+            return;
+        }
+        String q = query.trim().toLowerCase();
+        List<FileItem> filtered = new ArrayList<>();
+        for (FileItem item : browseFiles) {
+            if (item.getName().toLowerCase().contains(q)) {
+                filtered.add(item);
+            }
+        }
+        browseAdapter.submitList(filtered);
+    }
+
+    private void setupSearchTab() {
+        searchAdapter = new FileAdapter();
+        binding.searchResultsList.setLayoutManager(new LinearLayoutManager(requireContext()));
+        binding.searchResultsList.setAdapter(searchAdapter);
+
+        searchAdapter.setOnItemClickListener(new FileAdapter.OnItemClickListener() {
+            @Override
+            public void onItemClick(FileItem item) {
+                if (item.isDirectory()) {
+                    // Browse inside this tab â€” independent stack, Up returns.
+                    enterSearchFolder(item.getPath());
+                }
+            }
+
+            @Override
+            public void onItemLongClick(FileItem item) {
+                // no-op
+            }
+        });
+        searchAdapter.setOnSelectionChangedListener(count -> updateSearchSendButton());
+
+        binding.btnSearchUp.setOnClickListener(v -> searchUp());
+
+        binding.btnSearchSelect.setOnClickListener(v -> {
+            searchAdapter.setSelectionMode(!searchAdapter.isSelectionMode());
+            binding.btnSearchSelect.setText(searchAdapter.isSelectionMode() ? "Done" : "Select");
+            updateSearchSendButton();
+        });
+        binding.btnSearchSend.setOnClickListener(v -> uploadSearchSelected());
+        binding.btnRunSearch.setOnClickListener(v -> runSearchTab());
+        binding.searchInput.setOnEditorActionListener((v, actionId, event) -> {
+            boolean isSearch = actionId == EditorInfo.IME_ACTION_SEARCH
+                    || (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER);
+            if (isSearch) {
+                runSearchTab();
+                return true;
+            }
+            return false;
+        });
+        updateSearchSendButton();
+    }
+
+    private void updateSearchSendButton() {
+        if (binding == null) return;
+        int count = searchAdapter != null ? searchAdapter.getSelectedPaths().size() : 0;
+        binding.btnSearchSend.setEnabled(count > 0);
+        binding.btnSearchSend.setText(count > 0 ? "Send (" + count + ")" : "Send");
+    }
+
+    private void runSearchTab() {
+        String query = binding.searchInput.getText() != null
+                ? binding.searchInput.getText().toString().trim() : "";
+        if (query.isEmpty()) {
+            Toast.makeText(getContext(), "Enter a file name to search", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String dir = PathRegistry.moduleDir(getContext(), "search");
+        if (dir.isEmpty()) {
+            Toast.makeText(getContext(), "Storage not ready", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String out = dir + "/transfer-search-tab.json";
+        PathCache.remember("transfer-search-tab", out);
+        binding.searchResultsHint.setText("Searchingâ€¦");
+        NativeEngine.searchIndexAsync(requireContext(), query, 50, out, rawJson -> {
+            if (binding == null) return;
+            if ("busy".equals(PathCache.reason(rawJson))) {
+                binding.searchResultsHint.setText("Busy â€” try again");
+                return;
+            }
+            renderSearchResults(PathCache.readFile(PathCache.envelopePath(rawJson)));
+        });
+    }
+
+    /** Files first, then their distinct parent folders (tap a folder to browse it here). */
+    private void renderSearchResults(String content) {
+        List<FileItem> rows = new ArrayList<>();
+        List<String> folders = new ArrayList<>();
+        if (content != null) {
+            try {
+                JSONArray matches = new JSONObject(content).optJSONArray("matches");
+                if (matches != null) {
+                    for (int i = 0; i < matches.length(); i++) {
+                        String path = matches.getString(i);
+                        File f = new File(path);
+                        rows.add(new FileItem(f.getName(), path, "File", false, 0));
+                        String parent = f.getParent();
+                        if (parent != null && !folders.contains(parent)) {
+                            folders.add(parent);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        for (String folder : folders) {
+            File f = new File(folder);
+            rows.add(new FileItem(f.getName(), folder, "Folder â€” tap to browse", true, 0));
+        }
+        searchResultRows.clear();
+        searchResultRows.addAll(rows);
+        searchNavStack.clear();
+        searchAdapter.submitList(new ArrayList<>(rows));
+        binding.searchResultsHint.setText(rows.isEmpty()
+                ? "No matches â€” try Refresh index"
+                : rows.size() + " result(s)");
+    }
+
+    /** Independent folder stack for the Search tab â€” results persist underneath. */
+    private final List<String> searchNavStack = new ArrayList<>();
+    private final List<FileItem> searchResultRows = new ArrayList<>();
+
+    private void enterSearchFolder(String path) {
+        searchNavStack.add(path);
+        listSearchFolder(path);
+    }
+
+    private void searchUp() {
+        if (binding == null) return;
+        if (searchNavStack.isEmpty()) {
+            Toast.makeText(getContext(), "Already showing results", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        searchNavStack.remove(searchNavStack.size() - 1);
+        if (searchNavStack.isEmpty()) {
+            searchAdapter.submitList(new ArrayList<>(searchResultRows));
+            binding.searchResultsHint.setText(searchResultRows.isEmpty()
+                    ? "No matches â€” try Refresh index"
+                    : searchResultRows.size() + " result(s)");
+        } else {
+            listSearchFolder(searchNavStack.get(searchNavStack.size() - 1));
+        }
+    }
+
+    private void listSearchFolder(String path) {
+        if (binding == null) return;
+        List<FileItem> rows = new ArrayList<>();
+        File[] children = new File(path).listFiles();
+        if (children != null) {
+            Arrays.sort(children, Comparator
+                    .comparing((File f) -> !f.isDirectory())
+                    .thenComparing(f -> f.getName().toLowerCase()));
+            for (File c : children) {
+                if (c.isDirectory()) {
+                    rows.add(new FileItem(c.getName(), c.getAbsolutePath(), "Folder", true, 0));
+                } else {
+                    rows.add(new FileItem(c.getName(), c.getAbsolutePath(), formatSize(c.length()), false, c.length()));
+                }
+            }
+        }
+        searchAdapter.submitList(rows);
+        binding.searchResultsHint.setText(path);
+    }
+
+    private void setupTabs() {
+        binding.transferTabs.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
+            if (!isChecked) return;
+            if (checkedId == R.id.tab_guide) binding.transferViewFlipper.setDisplayedChild(0);
+            else if (checkedId == R.id.tab_transfer) binding.transferViewFlipper.setDisplayedChild(1);
+            else if (checkedId == R.id.tab_search) binding.transferViewFlipper.setDisplayedChild(2);
+            else if (checkedId == R.id.tab_browse) binding.transferViewFlipper.setDisplayedChild(3);
+            else if (checkedId == R.id.tab_network) binding.transferViewFlipper.setDisplayedChild(4);
+        });
+    }
+
+    private void showTransferTab() {
+        binding.transferTabs.check(R.id.tab_transfer);
+    }
+
+    private void showBrowseTab() {
+        binding.transferTabs.check(R.id.tab_browse);
+        loadBrowseDirectory(browsePath);
+        if (!binding.transferDrawerLayout.isDrawerOpen(GravityCompat.END)) {
+            binding.transferDrawerLayout.openDrawer(GravityCompat.END);
+        }
+    }
+
+    private void loadBrowseDirectory(String path) {
+        browsePath = path;
+        BrowseSession.transferBrowsePath = path;
+        binding.browseCurrentPath.setText(path);
+
+        // Plain directory listing â€” no index involved. The native index only
+        // serves global name search; browsing one folder never needs it.
+        List<FileItem> items = new ArrayList<>();
+        File[] children = new File(path).listFiles();
+        if (children != null) {
+            Arrays.sort(children, Comparator
+                    .comparing((File f) -> !f.isDirectory())
+                    .thenComparing(f -> f.getName().toLowerCase()));
+            for (File c : children) {
+                if (c.isDirectory()) {
+                    items.add(new FileItem(c.getName(), c.getAbsolutePath(), "Folder", true, 0));
+                }
+            }
+        }
+
+        if (!path.equals(FileIndexer.DEFAULT_ROOT) && path.contains("/")) {
+            int slash = path.lastIndexOf('/');
+            if (slash > 0) {
+                String parent = path.substring(0, slash);
+                items.add(0, new FileItem("..", parent, "Parent", true, 0));
+            }
+        }
+
+        browseFiles.clear();
+        browseFiles.addAll(items);
+        String filter = binding.browseFilter.getText() != null
+                ? binding.browseFilter.getText().toString() : "";
+        applyBrowseFilter(filter);
+    }
+
+    /** Index file shared with every other screen; builds it when missing. */
+    private void ensureIndexWarm() {
+        NativeEngine.indexMetaAsync(rawMeta -> {
+            if (!isAdded()) return;
+            if (isIndexMissing(rawMeta)) {
+                appendLog("Indexing local storage (background)â€¦");
+                NativeEngine.buildIndexAsync(requireContext(), FileIndexer.DEFAULT_ROOT, rawBuild -> {
+                    if (!isAdded()) return;
+                    appendLog("Index ready Â· " + buildCount(rawBuild) + " files");
+                });
+            } else {
+                appendLog("Index ready");
+            }
+        });
+    }
+
+    private void refreshIndexer() {
+        appendLog("Refreshing native indexâ€¦");
+        binding.btnRefreshIndexer.setEnabled(false);
+        NativeEngine.buildIndexAsync(requireContext(), FileIndexer.DEFAULT_ROOT, rawJson -> {
+            if (binding == null) return;
+            binding.btnRefreshIndexer.setEnabled(true);
+            int count = buildCount(rawJson);
+            if (count >= 0) {
+                appendLog("Index refreshed Â· " + count + " files");
+                Toast.makeText(getContext(), "Index refreshed", Toast.LENGTH_SHORT).show();
+            } else {
+                appendLog("Index refresh failed");
+                Toast.makeText(getContext(), "Index refresh failed", Toast.LENGTH_SHORT).show();
+            }
+                if (binding.transferViewFlipper.getDisplayedChild() == 3) {
+                loadBrowseDirectory(browsePath);
+            }
+        });
+    }
+
+    private static boolean isIndexMissing(String rawMeta) {
+        try {
+            String status = new JSONObject(rawMeta).optString("status", "");
+            return status.equals("missing") || rawMeta.contains("paths_not_initialized");
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
+    private static int buildCount(String rawJson) {
+        try {
+            return new JSONObject(rawJson).optInt("count", -1);
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    private void updateSavePathLabel() {
+        if (binding == null) return;
+        binding.savePathHint.setText("Save downloads to: " + savePath);
+        binding.drawerSavePath.setText(savePath);
+    }
+
+    private void testConnection() {
+        appendLog("Testing connection to " + Config.HOST + ":" + Config.PORT + "â€¦");
+        binding.connectionStatus.setText("Testingâ€¦");
+
+        new Thread(() -> {
+            boolean ok = false;
+            String message;
+            long start = System.currentTimeMillis();
+
+            try (Socket socket = new Socket()) {
+                socket.connect(new InetSocketAddress(Config.HOST, Config.PORT), 3000);
+                ok = socket.isConnected();
+                long ms = System.currentTimeMillis() - start;
+                message = ok ? "Connected (" + ms + " ms)" : "Not connected";
+            } catch (Exception e) {
+                message = "Failed: " + e.getMessage();
+            }
+
+            boolean finalOk = ok;
+            String finalMessage = message;
+
+            runOnUi(() -> {
+                binding.connectionStatus.setText(finalMessage);
+                binding.connectionStatus.setTextColor(
+                        getResources().getColor(
+                                finalOk ? R.color.WayDirect_success : R.color.WayDirect_error, null));
+                appendLog(finalMessage);
+            });
+        }).start();
+    }
+
+    private void startListener() {
+        appendLog("Starting listener on port 8080â€¦");
+        TransferController.startServerListener(8080, status -> runOnUi(() -> {
+            String line = "Listener: " + status.getStatus() + " port=" + status.getPort();
+            appendLog(line);
+        }));
+    }
+
+    private void runDownload() {
+        String name = binding.transferFilename.getText() != null
+                ? binding.transferFilename.getText().toString().trim()
+                : "";
+
+        if (name.isEmpty()) {
+            Toast.makeText(getContext(), "Enter a file name", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        File workingDir = new File(savePath);
+        if (!workingDir.exists()) {
+            //noinspection ResultOfMethodCallIgnored
+            workingDir.mkdirs();
+        }
+
+        String command = "/ask " + name;
+        appendLog("Download: " + name + " â†’ " + savePath);
+        setTransferButtonsEnabled(false);
+
+        long started = System.currentTimeMillis();
+
+        NetworkManager.processProtocolCommand(command, workingDir, new NetworkCallback() {
+            @Override
+            public void onConsoleUpdate(String outputText) {
+                runOnUi(() -> appendLog(outputText));
+            }
+
+            @Override
+            public void onOperationComplete(String finalResult) {
+                long elapsed = Math.max(1, System.currentTimeMillis() - started);
+                runOnUi(() -> {
+                    appendLog(finalResult);
+                    setTransferButtonsEnabled(true);
+
+                    if (finalResult != null && finalResult.toLowerCase().contains("success")) {
+                        File f = new File(workingDir, name);
+                        long bytes = f.exists() ? f.length() : 0;
+                        sessionReceivedBytes += bytes;
+                        updateSessionStats();
+                        if (bytes > 0) {
+                            double kbps = (bytes / 1024.0) / (elapsed / 1000.0);
+                            binding.bandwidthHint.setText(
+                                    String.format("Last transfer ~ %.1f KB/s (%d ms)", kbps, elapsed));
+                        }
+                        recordSuccess(true, name, savePath);
+                    }
+                });
+            }
+        });
+    }
+
+    private void runUploadSearch() {
+        String name = binding.transferFilename.getText() != null
+                ? binding.transferFilename.getText().toString().trim()
+                : "";
+
+        if (name.isEmpty()) {
+            Toast.makeText(getContext(), "Enter a file name to search", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        appendLog("Searching index for \"" + name + "\"â€¦");
+        setTransferButtonsEnabled(false);
+
+        // Global search runs on the shared native index (same file every
+        // screen reads). Builds it first when missing, then searches.
+        NativeEngine.indexMetaAsync(rawMeta -> {
+            if (!isAdded()) {
+                runOnUi(() -> setTransferButtonsEnabled(true));
+                return;
+            }
+            if (isIndexMissing(rawMeta)) {
+                appendLog("Index missing â€” building firstâ€¦");
+                NativeEngine.buildIndexAsync(requireContext(), FileIndexer.DEFAULT_ROOT,
+                        rawBuild -> runOnUi(() -> doUploadSearch(name)));
+            } else {
+                doUploadSearch(name);
+            }
+        });
+    }
+
+    private void doUploadSearch(String name) {
+        String dir = PathRegistry.moduleDir(getContext(), "search");
+        if (dir.isEmpty()) {
+            setTransferButtonsEnabled(true);
+            Toast.makeText(getContext(), "Storage not ready", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String out = dir + "/transfer-matches.json";
+        PathCache.remember("transfer-search", out);
+        NativeEngine.searchIndexAsync(requireContext(), name, 50, out, rawJson -> {
+            if (!isAdded()) return;
+            setTransferButtonsEnabled(true);
+            if ("busy".equals(PathCache.reason(rawJson))) {
+                Toast.makeText(getContext(), "Search busy â€” try again", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            List<String> matches = parseIndexMatches(PathCache.readFile(PathCache.envelopePath(rawJson)));
+            if (matches.isEmpty()) {
+                appendLog("No local files matched \"" + name + "\"");
+                Toast.makeText(getContext(), "No matches â€” try Refresh index", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (matches.size() == 1) {
+                confirmSingleUpload(matches.get(0));
+            } else {
+                showMatchPicker(matches);
+            }
+        });
+    }
+
+    private static List<String> parseIndexMatches(String content) {
+        List<String> matches = new ArrayList<>();
+        if (content == null) return matches;
+        try {
+            JSONArray array = new JSONObject(content).optJSONArray("matches");
+            if (array != null) {
+                for (int i = 0; i < array.length(); i++) {
+                    matches.add(array.getString(i));
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return matches;
+    }
+
+    private void confirmSingleUpload(String absolutePath) {
+        File f = new File(absolutePath);
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Upload this file?")
+                .setMessage(f.getName() + "\n\n" + absolutePath)
+                .setPositiveButton("Confirm upload", (d, w) -> performUpload(absolutePath))
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void showMatchPicker(List<String> matches) {
+        String[] labels = new String[matches.size()];
+        for (int i = 0; i < matches.size(); i++) {
+            File f = new File(matches.get(i));
+            labels[i] = f.getName() + "  Â·  " + f.getParent();
+        }
+
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                requireContext(),
+                android.R.layout.simple_list_item_1,
+                labels
+        );
+
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Choose file to upload (" + matches.size() + ")")
+                .setAdapter(adapter, (dialog, which) -> performUpload(matches.get(which)))
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void uploadSearchSelected() {
+        List<String> files = filesOnly(searchAdapter.getSelectedPaths());
+        if (files.isEmpty()) {
+            Toast.makeText(getContext(), "Tick files to send first", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        searchAdapter.setSelectionMode(false);
+        binding.btnSearchSelect.setText("Select");
+        updateSearchSendButton();
+        uploadPaths(files);
+    }
+
+    private static List<String> filesOnly(List<String> paths) {
+        List<String> files = new ArrayList<>();
+        if (paths == null) return files;
+        for (String path : paths) {
+            if (path != null && new File(path).isFile()) files.add(path);
+        }
+        return files;
+    }
+
+    private void uploadPaths(List<String> files) {
+        if (!TransferQueue.save(requireContext(), files)) {
+            Toast.makeText(getContext(), "Cannot save queue", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        queueCancelled = false;
+        setQueueActive(true);
+        setTransferButtonsEnabled(false);
+        appendLog("Queue: " + files.size() + " file(s)");
+        renderSessionQueue();
+        uploadNext(0, files, 0);
+    }
+
+    private void uploadNext(int index, List<String> paths, int sent) {
+        if (binding == null) return;
+        if (queueCancelled) {
+            queueCancelled = false;
+            setQueueActive(false);
+            setTransferButtonsEnabled(true);
+            appendLog("Queue cancelled Â· " + sent + "/" + paths.size() + " sent");
+            setQueueStatus("Queue: cancelled (" + sent + "/" + paths.size() + ")");
+            renderSessionQueue();
+            return;
+        }
+        if (index >= paths.size()) {
+            setQueueActive(false);
+            setTransferButtonsEnabled(true);
+            appendLog("Queue done Â· " + sent + "/" + paths.size() + " sent");
+            setQueueStatus("Queue: done (" + sent + "/" + paths.size() + ")");
+            Toast.makeText(getContext(), "Sent " + sent + "/" + paths.size(), Toast.LENGTH_SHORT).show();
+            renderSessionQueue();
+            return;
+        }
+        String path = paths.get(index);
+        setQueueStatus("Queue: sending " + (index + 1) + "/" + paths.size());
+        appendLog("[" + (index + 1) + "/" + paths.size() + "] " + new File(path).getName());
+        TransferQueue.setStatus(requireContext(), path, "sending");
+        renderSessionQueue();
+        performUpload(path, ok -> {
+            TransferQueue.setStatus(requireContext(), path, ok ? "done" : "failed");
+            renderSessionQueue();
+            uploadNext(index + 1, paths, ok ? sent + 1 : sent);
+        });
+    }
+
+    private interface UploadDone {
+        void onDone(boolean ok);
+    }
+
+    private void performUpload(String absolutePath) {
+        performUpload(absolutePath, null);
+    }
+
+    private void performUpload(String absolutePath, UploadDone onDone) {
+        File local = new File(absolutePath);
+        String command = "/upload " + absolutePath;
+        appendLog("Upload: " + local.getName() + " â† " + absolutePath);
+        setTransferButtonsEnabled(false);
+
+        long started = System.currentTimeMillis();
+        File parent = local.getParentFile() != null ? local.getParentFile() : requireContext().getFilesDir();
+
+        NetworkManager.processProtocolCommand(command, parent, new NetworkCallback() {
+            @Override
+            public void onConsoleUpdate(String outputText) {
+                runOnUi(() -> appendLog(outputText));
+            }
+
+            @Override
+            public void onOperationComplete(String finalResult) {
+                long elapsed = Math.max(1, System.currentTimeMillis() - started);
+                runOnUi(() -> {
+                    appendLog(finalResult);
+                    setTransferButtonsEnabled(true);
+
+                    boolean ok = finalResult != null && finalResult.toLowerCase().contains("success");
+                    if (ok) {
+                        long bytes = local.exists() ? local.length() : 0;
+                        sessionSentBytes += bytes;
+                        updateSessionStats();
+                        if (bytes > 0) {
+                            double kbps = (bytes / 1024.0) / (elapsed / 1000.0);
+                            binding.bandwidthHint.setText(
+                                    String.format("Last transfer ~ %.1f KB/s (%d ms)", kbps, elapsed));
+                        }
+                        recordSuccess(false, local.getName(), absolutePath);
+                    }
+                    if (onDone != null) onDone.onDone(ok);
+                });
+            }
+        });
+    }
+
+    private void setTransferButtonsEnabled(boolean enabled) {
+        if (binding == null) return;
+        binding.btnDownload.setEnabled(enabled);
+        binding.btnUpload.setEnabled(enabled);
+    }
+
+    private void updateSessionStats() {
+        if (binding == null) return;
+        binding.sessionStats.setText(
+                "Sent: " + formatSize(sessionSentBytes)
+                        + " Â· Received: " + formatSize(sessionReceivedBytes));
+    }
+
+    private String formatSize(long bytes) {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return String.format("%.1f KB", bytes / 1024.0);
+        return String.format("%.1f MB", bytes / (1024.0 * 1024));
+    }
+
+    private void appendLog(String line) {
+        if (binding == null) return;
+        binding.transferLog.setText(binding.transferLog.getText() + line + "\n");
+    }
+
+    private void runOnUi(Runnable r) {
+        if (getActivity() == null) return;
+        getActivity().runOnUiThread(() -> {
+            if (binding != null) r.run();
+        });
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        binding = null;
+    }
+}
+
