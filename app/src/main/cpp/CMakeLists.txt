@@ -14,7 +14,7 @@ include(CompilerFlags)
 add_library(
     waydirect_native
     SHARED
-    wayer_native.cpp
+    waydirect_native.cpp
 )
 
 find_library(
