@@ -2,7 +2,7 @@
  * Android-safe directory walk (bionic only).
  * Avoids statx — required for Android 10 seccomp.
  */
-#include "wayer/storage/dir_walk_android.h"
+#include "waydirect/storage/dir_walk_android.h"
 
 #include <dirent.h>
 #include <stdlib.h>
