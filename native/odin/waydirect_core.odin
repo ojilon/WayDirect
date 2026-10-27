@@ -162,7 +162,7 @@ split_trailing_number :: proc(payload: string, default_value: u64) -> (text: str
 // INIT_APP_PATHS â€” Java passes filesDir once, we create layout + manifest
 // ---------------------------------------------------------------------------
 
-init_app_paths :: proc(raw: string) -> cstring {
+init_app_paths_internal :: proc(raw: string) -> cstring {
 	// Trim trailing slashes/whitespace so "/data/.../files/" and "/data/.../files" match
 	root := strings.trim_right(raw, "\n\r \t/")
 	if len(root) == 0 {
@@ -280,7 +280,7 @@ dispatch_action :: proc(action_id: int, payload: string) -> cstring {
 		return reply(storage.write_storage_stats(parts[1], parts[0], known_bytes))
 
 	case ACTION_INIT_APP_PATHS:
-		return init_app_paths(payload)
+		return init_app_paths_internal(payload)
 
 	case ACTION_BUILD_INDEX:
 		// payload: root|index_path
