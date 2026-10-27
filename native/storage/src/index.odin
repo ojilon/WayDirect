@@ -41,10 +41,10 @@ foreign import index_c "system:c"
 
 @(default_calling_convention = "c")
 foreign index_c {
-	build_index          :: proc(root, index_path: cstring) -> cstring ---
-	index_meta           :: proc(index_path: cstring) -> cstring ---
-	search_index_to_file :: proc(query: cstring, max_results: u64, out_path, index_path: cstring) -> cstring ---
-	group_index_by_day   :: proc(index_path, out_path: cstring, max_days, max_per_day: c.int) -> cstring ---
+    build_index_c :: proc(root, index_path: cstring) -> cstring --- @(link_name = "build_index")
+    index_meta_c :: proc(index_path: cstring) -> cstring --- @(link_name = "index_meta")
+    search_index_to_file_c :: proc(query: cstring, max_results: u64, out_path, index_path: cstring) -> cstring --- @(link_name = "search_index_to_file")
+    group_index_by_day_c :: proc(index_path, out_path: cstring, max_days, max_per_day: c.int) -> cstring --- @(link_name = "group_index_by_day")
 }
 
 // cs is already defined in fs_android.odin (same package) â€” reuse it.
@@ -63,7 +63,7 @@ build_index :: proc(root: string, index_path: string) -> string {
 	if len(root) == 0 || len(index_path) == 0 {
 		return `{"error":"bad_payload"}`
 	}
-	return string(build_index(fs.cs(root), fs.cs(index_path)))
+	return string(build_index_c(fs.cs(root), fs.cs(index_path)))
 }
 
 // index_meta returns metadata for index_path (bytes, mtime) without the listing.
@@ -71,7 +71,7 @@ index_meta :: proc(index_path: string) -> string {
 	if len(index_path) == 0 {
 		return `{"error":"bad_payload"}`
 	}
-	return string(index_meta(fs.cs(index_path)))
+	return string(index_meta_c(fs.cs(index_path)))
 }
 
 // search_index_to_file searches index_path for query, spills matches to out_path.
@@ -86,7 +86,7 @@ search_index_to_file :: proc(query: string, max_results: u64, out_path: string, 
 	if limit > 200 {
 		limit = 200
 	}
-	return string(search_index_to_file(fs.cs(query), limit, fs.cs(out_path), fs.cs(index_path)))
+	return string(search_index_to_file_c(fs.cs(query), limit, fs.cs(out_path), fs.cs(index_path)))
 }
 
 // group_index_by_day groups index entries by modification day, spills to out_path.
@@ -108,6 +108,6 @@ group_index_by_day :: proc(index_path: string, out_path: string, max_days: int, 
 	if per_day > 64 {
 		per_day = 64
 	}
-	return string(group_index_by_day(fs.cs(index_path), fs.cs(out_path), c.int(days), c.int(per_day)))
+	return string(group_index_by_day_c(fs.cs(index_path), fs.cs(out_path), c.int(days), c.int(per_day)))
 }
 
