@@ -293,7 +293,7 @@ dispatch_action :: proc(action_id: int, payload: string) -> cstring {
 	case ACTION_INDEX_META:
 		// payload: index_path (or "" â†’ use default; handled here as bad_payload)
 		if len(payload) == 0 do return reply(BAD_PAYLOAD)
-		return reply_c(index_meta_odin(cs(payload)))
+		return reply(storage.index_meta_odin(payload))
 
 	case ACTION_SEARCH_INDEX:
 		// payload: out_path|index_path|max_results|query
