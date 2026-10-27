@@ -1,5 +1,5 @@
-// wayer_core — logging facade. See include/wayer/core/logging.hpp.
-#include <wayer/core/logging.hpp>
+﻿// wayer_core â€” logging facade. See include/wayer/core/logging.hpp.
+#include <waydirect/core/logging.hpp>
 
 #include <cstdio>
 #include <string>
@@ -8,7 +8,7 @@
 #include <android/log.h>
 #endif
 
-namespace wayer::core::log {
+namespace waydirect::core::log {
 
 void info(std::string_view tag, std::string_view msg) {
 #if defined(__ANDROID__)
@@ -38,4 +38,5 @@ void errorf(const char* tag, const char* msg) {
     error(tag != nullptr ? tag : "Wayer", msg != nullptr ? msg : "");
 }
 
-} // namespace wayer::core::log
+} // namespace waydirect::core::log
+

@@ -1,7 +1,7 @@
-// wayer_storage — SQLite stats record. See include/wayer/storage/stats_db.hpp.
-#include <wayer/storage/stats_db.hpp>
+﻿// wayer_storage â€” SQLite stats record. See include/wayer/storage/stats_db.hpp.
+#include <waydirect/storage/stats_db.hpp>
 
-#include <wayer/core/paths.hpp>
+#include <waydirect/core/paths.hpp>
 
 #include <sqlite3.h>
 
@@ -11,7 +11,7 @@
 #include <string>
 #include <system_error>
 
-namespace wayer::storage {
+namespace waydirect::storage {
 namespace fs = std::filesystem;
 
 bool stats_db_record(const std::string& root, uint64_t total_bytes, uint64_t used_bytes) {
@@ -64,4 +64,5 @@ bool stats_db_record(const std::string& root, uint64_t total_bytes, uint64_t use
     return ok;
 }
 
-} // namespace wayer::storage
+} // namespace waydirect::storage
+

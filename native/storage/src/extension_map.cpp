@@ -1,14 +1,14 @@
-// wayer_storage — extension → category map.
+﻿// wayer_storage â€” extension â†’ category map.
 // See include/wayer/storage/extension_map.hpp.
-#include <wayer/storage/extension_map.hpp>
+#include <waydirect/storage/extension_map.hpp>
 
-#include <wayer/core/text.hpp>
+#include <waydirect/core/text.hpp>
 
 #include <string>
 #include <string_view>
 #include <unordered_map>
 
-namespace wayer::storage {
+namespace waydirect::storage {
 
 const std::unordered_map<std::string, std::string> EXTENSION_MAP = {
     {".jpg", "images"}, {".jpeg", "images"}, {".png", "images"}, {".webp", "images"},
@@ -25,4 +25,5 @@ std::string category_for_extension(std::string_view ext) {
     return found->second;
 }
 
-} // namespace wayer::storage
+} // namespace waydirect::storage
+

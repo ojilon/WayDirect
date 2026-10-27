@@ -1,5 +1,5 @@
-// wayer_storage — file-backed cache for stats/index JSON blobs.
-#include <wayer/storage/storage_cache.hpp>
+﻿// wayer_storage â€” file-backed cache for stats/index JSON blobs.
+#include <waydirect/storage/storage_cache.hpp>
 
 #include <chrono>
 #include <filesystem>
@@ -7,7 +7,7 @@
 #include <string>
 #include <system_error>
 
-namespace wayer::storage {
+namespace waydirect::storage {
 namespace fs = std::filesystem;
 
 void write_cache(const std::string& cache_path, const std::string& json) {
@@ -41,4 +41,5 @@ bool invalidate_cache(const std::string& cache_path) {
     return fs::remove(cache_path, ec);
 }
 
-} // namespace wayer::storage
+} // namespace waydirect::storage
+

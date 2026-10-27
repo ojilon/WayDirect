@@ -1,8 +1,8 @@
-// wayer_storage_cleaner — top-N largest files under a root.
-#include <wayer/storage/cleaner.hpp>
+﻿// wayer_storage_cleaner â€” top-N largest files under a root.
+#include <waydirect/storage/cleaner.hpp>
 
-#include <wayer/core/json_util.hpp>
-#include <wayer/core/text.hpp>
+#include <waydirect/core/json_util.hpp>
+#include <waydirect/core/text.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -14,7 +14,7 @@
 #include <system_error>
 #include <vector>
 
-namespace wayer::storage {
+namespace waydirect::storage {
 namespace fs = std::filesystem;
 
 struct LargeEntry {
@@ -76,4 +76,5 @@ std::string find_large_files_to_file(const std::string& root_path, uint64_t min_
     return std::format(R"({{"status":"ok","path":"{}"}})", core::json::escape(out_path));
 }
 
-} // namespace wayer::storage
+} // namespace waydirect::storage
+

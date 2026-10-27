@@ -1,5 +1,5 @@
-#pragma once
-// wayer_storage — stats document model + JSON writer (defined in src/stats_json.cpp).
+﻿#pragma once
+// wayer_storage â€” stats document model + JSON writer (defined in src/stats_json.cpp).
 // Split out of analyse_storage_space.cpp so the document shape is buildable
 // and testable without touching the filesystem. Field names match what the
 // Java screens have always parsed, plus "folders".
@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace wayer::storage {
+namespace waydirect::storage {
 
 struct FolderStat {
     std::string name;
@@ -29,7 +29,8 @@ struct StorageNumbers {
     std::vector<FolderStat> folders; // top-level dirs by size, already capped
 };
 
-// Built with the JSON lib — no hand-format string surgery as it grows.
+// Built with the JSON lib â€” no hand-format string surgery as it grows.
 std::string build_stats_json(const StorageNumbers& numbers);
 
-} // namespace wayer::storage
+} // namespace waydirect::storage
+

@@ -1,11 +1,11 @@
-// wayer_core — JSON output helpers. See include/wayer/core/json_util.hpp.
-#include <wayer/core/json_util.hpp>
+﻿// wayer_core â€” JSON output helpers. See include/wayer/core/json_util.hpp.
+#include <waydirect/core/json_util.hpp>
 
 #include <cstdio>
 #include <string>
 #include <string_view>
 
-namespace wayer::core::json {
+namespace waydirect::core::json {
 
 std::string escape(std::string_view s) {
     std::string out;
@@ -32,4 +32,5 @@ std::string escape(std::string_view s) {
     return out;
 }
 
-} // namespace wayer::core::json
+} // namespace waydirect::core::json
+

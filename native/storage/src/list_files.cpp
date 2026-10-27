@@ -1,13 +1,13 @@
-// wayer_storage — non-recursive directory listing.
-#include <wayer/storage/list_files.hpp>
+﻿// wayer_storage â€” non-recursive directory listing.
+#include <waydirect/storage/list_files.hpp>
 
-#include <wayer/core/json_util.hpp>
+#include <waydirect/core/json_util.hpp>
 
 #include <filesystem>
 #include <sstream>
 #include <system_error>
 
-namespace wayer::storage {
+namespace waydirect::storage {
 namespace fs = std::filesystem;
 
 std::string list_files(std::string_view path) {
@@ -33,4 +33,5 @@ std::string list_files(std::string_view path) {
     return json.str();
 }
 
-} // namespace wayer::storage
+} // namespace waydirect::storage
+

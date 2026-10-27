@@ -1,10 +1,10 @@
-// wayer_storage_organizer — plan + apply organization moves.
-#include <wayer/storage/organizer.hpp>
+﻿// wayer_storage_organizer â€” plan + apply organization moves.
+#include <waydirect/storage/organizer.hpp>
 
-#include <wayer/core/json_util.hpp>
-#include <wayer/core/text.hpp>
-#include <wayer/storage/extension_map.hpp>
-#include <wayer/storage/walker.hpp>
+#include <waydirect/core/json_util.hpp>
+#include <waydirect/core/text.hpp>
+#include <waydirect/storage/extension_map.hpp>
+#include <waydirect/storage/walker.hpp>
 
 #include <nlohmann/json.hpp>
 
@@ -16,7 +16,7 @@
 #include <system_error>
 #include <vector>
 
-namespace wayer::storage {
+namespace waydirect::storage {
 namespace fs = std::filesystem;
 
 namespace {
@@ -63,7 +63,7 @@ std::string plan_organize(const std::string& root_path) {
 
         // Only file types we actually recognize AND intend to relocate.
         // Images stay where they are for now (camera roll / DCIM conventions
-        // need separate handling — see flags.md).
+        // need separate handling â€” see flags.md).
         if (category == "others" || category == "images") return;
 
         std::string bucket = date_bucket(src);
@@ -173,4 +173,5 @@ std::string apply_organize_file(const std::string& plan_path, const std::string&
     return std::format(R"({{"status":"ok","path":"{}"}})", core::json::escape(report_path));
 }
 
-} // namespace wayer::storage
+} // namespace waydirect::storage
+

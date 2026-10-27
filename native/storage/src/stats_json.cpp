@@ -1,5 +1,5 @@
-// wayer_storage — stats document writer. See include/wayer/storage/stats_json.hpp.
-#include <wayer/storage/stats_json.hpp>
+﻿// wayer_storage â€” stats document writer. See include/wayer/storage/stats_json.hpp.
+#include <waydirect/storage/stats_json.hpp>
 
 #include <nlohmann/json.hpp>
 
@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace wayer::storage {
+namespace waydirect::storage {
 
 std::string build_stats_json(const StorageNumbers& numbers) {
     nlohmann::json breakdown;
@@ -37,4 +37,5 @@ std::string build_stats_json(const StorageNumbers& numbers) {
     return doc.dump();
 }
 
-} // namespace wayer::storage
+} // namespace waydirect::storage
+

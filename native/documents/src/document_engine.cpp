@@ -1,8 +1,8 @@
-// wayer_documents — recursive document filter. Migrated from document_engine.cpp.
-#include <wayer/documents/document_engine.hpp>
+﻿// wayer_documents â€” recursive document filter. Migrated from document_engine.cpp.
+#include <waydirect/documents/document_engine.hpp>
 
-#include <wayer/core/json_util.hpp>
-#include <wayer/core/text.hpp>
+#include <waydirect/core/json_util.hpp>
+#include <waydirect/core/text.hpp>
 
 #include <array>
 #include <filesystem>
@@ -11,7 +11,7 @@
 #include <string_view>
 #include <system_error>
 
-namespace wayer::documents {
+namespace waydirect::documents {
 namespace fs = std::filesystem;
 
 constexpr std::array<std::string_view, 5> TARGET_EXTENSIONS{
@@ -53,15 +53,16 @@ std::string filter_documents(std::string_view path) {
             }
             items_json += std::format(
                 R"({{"name":"{}","path":"{}","size":{}}})",
-                wayer::core::json::escape(entry.path().filename().string()),
-                wayer::core::json::escape(entry.path().string()),
+                waydirect::core::json::escape(entry.path().filename().string()),
+                waydirect::core::json::escape(entry.path().string()),
                 size);
             first = false;
         }
     }
 
     return std::format(R"({{"path":"{}","documents":[{}]}})",
-                       wayer::core::json::escape(std::string(path)), items_json);
+                       waydirect::core::json::escape(std::string(path)), items_json);
 }
 
-} // namespace wayer::documents
+} // namespace waydirect::documents
+

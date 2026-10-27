@@ -1,7 +1,7 @@
-#pragma once
+﻿#pragma once
 #include <string>
 
-namespace wayer::core {
+namespace waydirect::core {
 
 /**
  * App-owned directories under the path Java passes at init (filesDir / subdir).
@@ -55,4 +55,5 @@ void set_app_paths(const AppPaths& paths);
 const AppPaths& app_paths();
 bool app_paths_initialized();
 
-} // namespace wayer::core
+} // namespace waydirect::core
+

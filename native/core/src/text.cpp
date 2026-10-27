@@ -1,12 +1,12 @@
-// wayer_core — plain-text helpers. See include/wayer/core/text.hpp.
-#include <wayer/core/text.hpp>
+﻿// wayer_core â€” plain-text helpers. See include/wayer/core/text.hpp.
+#include <waydirect/core/text.hpp>
 
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <system_error>
 
-namespace wayer::core {
+namespace waydirect::core {
 namespace fs = std::filesystem;
 
 std::string ascii_lower(std::string s) {
@@ -31,4 +31,5 @@ bool write_text_file(const std::string& path, const std::string& content) {
     return static_cast<bool>(out);
 }
 
-} // namespace wayer::core
+} // namespace waydirect::core
+

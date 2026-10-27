@@ -1,7 +1,7 @@
-// wayer_core — AppPaths implementation. See include/wayer/core/paths.hpp.
-#include <wayer/core/paths.hpp>
+﻿// wayer_core â€” AppPaths implementation. See include/wayer/core/paths.hpp.
+#include <waydirect/core/paths.hpp>
 
-#include <wayer/core/json_util.hpp>
+#include <waydirect/core/json_util.hpp>
 
 #include <filesystem>
 #include <format>
@@ -10,7 +10,7 @@
 #include <string>
 #include <system_error>
 
-namespace wayer::core {
+namespace waydirect::core {
 
     namespace {
     std::mutex g_mutex;
@@ -108,4 +108,5 @@ namespace wayer::core {
     
     int core_module_anchor() { return 0; }
 
-} // namespace wayer::core
+} // namespace waydirect::core
+

@@ -1,5 +1,5 @@
-// wayer_transfer — network helpers. Migrated from transfer_engine.cpp.
-#include <wayer/transfer/transfer_engine.hpp>
+﻿// wayer_transfer â€” network helpers. Migrated from transfer_engine.cpp.
+#include <waydirect/transfer/transfer_engine.hpp>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -10,7 +10,7 @@
 #include <format>
 #include <string>
 
-namespace wayer::transfer {
+namespace waydirect::transfer {
 
 std::string get_network_info() {
     return R"({"transfer status": "idle", "protocol" : "raw_sockets"})";
@@ -46,4 +46,5 @@ std::string start_listener(int port) {
     return std::format(R"({{"status": "socket_bound", "port": {}}})", port);
 }
 
-} // namespace wayer::transfer
+} // namespace waydirect::transfer
+

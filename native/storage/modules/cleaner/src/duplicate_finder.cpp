@@ -1,11 +1,11 @@
-// wayer_storage_cleaner — duplicate detection (size → partial hash → full hash).
+﻿// wayer_storage_cleaner â€” duplicate detection (size â†’ partial hash â†’ full hash).
 // v2 JSON: {"version":2,"duplicate_groups":[[{path,size,mtime}...]],"related_groups":[{key,files:[...]}]}
 // Contract kept: find_duplicates_to_file writes file, returns {"status":"ok","path":...} only.
-#include <wayer/storage/cleaner.hpp>
+#include <waydirect/storage/cleaner.hpp>
 
-#include <wayer/core/json_util.hpp>
-#include <wayer/core/text.hpp>
-#include <wayer/storage/walker.hpp>
+#include <waydirect/core/json_util.hpp>
+#include <waydirect/core/text.hpp>
+#include <waydirect/storage/walker.hpp>
 
 #include <algorithm>
 #include <array>
@@ -21,18 +21,18 @@
 #include <unordered_map>
 #include <vector>
 
-namespace wayer::storage {
+namespace waydirect::storage {
 
 namespace {
 
-// One file's info for the eraser UI. Plain struct — no methods.
+// One file's info for the eraser UI. Plain struct â€” no methods.
 struct DupFile {
     std::string path;
     uint64_t size = 0;
     int64_t mtime = 0; // unix seconds, 0 = unknown
 };
 
-// FNV-1a 64 over a byte stream — chunked, so multi-GB files never load fully.
+// FNV-1a 64 over a byte stream â€” chunked, so multi-GB files never load fully.
 uint64_t fnv1a_stream(std::istream& in, size_t max_bytes = static_cast<size_t>(-1)) {
     constexpr uint64_t kOffset = 14695981039346656037ULL;
     constexpr uint64_t kPrime = 1099511628211ULL;
@@ -75,7 +75,7 @@ bool try_full_hash(const fs::path& p, uint64_t& out) {
 }
 
 // Final guard: hash says "maybe equal", bytes say "sure".
-// Returns false on any open/read trouble — caller treats as "not proven".
+// Returns false on any open/read trouble â€” caller treats as "not proven".
 bool files_byte_equal(const fs::path& a, const fs::path& b) {
     std::ifstream fa(a, std::ios::binary);
     std::ifstream fb(b, std::ios::binary);
@@ -131,7 +131,7 @@ void trim_trailing_space_dash(const std::string& s, std::string& out) {
 }
 
 // "notes (1).docx" / "notes - final.docx" / "notes_v2.pdf" -> "notes"
-// NEVER used for delete decisions — display grouping only.
+// NEVER used for delete decisions â€” display grouping only.
 std::string normalize_related_key(const std::string& filename) {
     std::string lower = core::ascii_lower(filename);
     size_t dot = lower.rfind('.');
@@ -354,4 +354,5 @@ std::string find_duplicates_to_file(const std::string& root_path, const std::str
     return std::format(R"({{"status":"ok","path":"{}"}})", core::json::escape(out_path));
 }
 
-} // namespace wayer::storage
+} // namespace waydirect::storage
+

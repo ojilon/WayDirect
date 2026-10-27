@@ -1,8 +1,8 @@
-// wayer_storage_search — case-insensitive file-name search.
-#include <wayer/storage/search.hpp>
+﻿// wayer_storage_search â€” case-insensitive file-name search.
+#include <waydirect/storage/search.hpp>
 
-#include <wayer/core/json_util.hpp>
-#include <wayer/core/text.hpp>
+#include <waydirect/core/json_util.hpp>
+#include <waydirect/core/text.hpp>
 
 #include <filesystem>
 #include <format>
@@ -10,7 +10,7 @@
 #include <system_error>
 #include <vector>
 
-namespace wayer::storage {
+namespace waydirect::storage {
 namespace fs = std::filesystem;
 
 struct SearchResult {
@@ -78,4 +78,5 @@ std::string search_files_to_file(const std::string& root_path, const std::string
     return std::format(R"({{"status":"ok","path":"{}"}})", core::json::escape(out_path));
 }
 
-} // namespace wayer::storage
+} // namespace waydirect::storage
+

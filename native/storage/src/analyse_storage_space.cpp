@@ -1,12 +1,12 @@
-// wayer_storage — storage statistics over a root path.
-#include <wayer/storage/analyse_storage_space.hpp>
+﻿// wayer_storage â€” storage statistics over a root path.
+#include <waydirect/storage/analyse_storage_space.hpp>
 
-#include <wayer/core/json_util.hpp>
-#include <wayer/core/text.hpp>
-#include <wayer/storage/extension_map.hpp>
-#include <wayer/storage/stats_db.hpp>
-#include <wayer/storage/stats_json.hpp>
-#include <wayer/storage/walker.hpp>
+#include <waydirect/core/json_util.hpp>
+#include <waydirect/core/text.hpp>
+#include <waydirect/storage/extension_map.hpp>
+#include <waydirect/storage/stats_db.hpp>
+#include <waydirect/storage/stats_json.hpp>
+#include <waydirect/storage/walker.hpp>
 
 #include <algorithm>
 #include <cstdint>
@@ -17,7 +17,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace wayer::storage {
+namespace waydirect::storage {
 
     namespace fs = std::filesystem;
     
@@ -55,7 +55,7 @@ namespace wayer::storage {
     
         // One walk feeds both breakdowns: per-extension categories and per
         // top-level-folder sizes. Files sitting directly under the root count
-        // toward categories only — they belong to no folder.
+        // toward categories only â€” they belong to no folder.
         const fs::path root_dir(root_path);
         walk_files(root_path, [&](const fs::directory_entry& entry) {
             std::error_code ec;
@@ -108,4 +108,5 @@ namespace wayer::storage {
         return std::format(R"({{"status":"ok","path":"{}"}})", core::json::escape(out_path));
     }
 
-} // namespace wayer::storage
+} // namespace waydirect::storage
+

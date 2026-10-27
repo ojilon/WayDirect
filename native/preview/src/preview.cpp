@@ -1,7 +1,7 @@
-// wayer_preview — read-only text preview. See include/wayer/preview/preview.hpp.
-#include <wayer/preview/preview.hpp>
+﻿// wayer_preview â€” read-only text preview. See include/wayer/preview/preview.hpp.
+#include <waydirect/preview/preview.hpp>
 
-#include <wayer/core/json_util.hpp>
+#include <waydirect/core/json_util.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -11,7 +11,7 @@
 #include <string>
 #include <system_error>
 
-namespace wayer::preview {
+namespace waydirect::preview {
 namespace fs = std::filesystem;
 
 namespace {
@@ -43,7 +43,7 @@ std::string read_text_file(const std::string& path, std::size_t max_bytes) {
     if (got < 0) return R"({"error":"unreadable"})";
     buf.resize(static_cast<std::size_t>(got));
 
-    // Binary sniff: a NUL byte means "not text" — report metadata only.
+    // Binary sniff: a NUL byte means "not text" â€” report metadata only.
     for (char c : buf) {
         if (c == '\0') {
             return std::format(R"({{"path":"{}","size":{},"binary":true}})",
@@ -74,4 +74,5 @@ std::string read_text_file(const std::string& path, std::size_t max_bytes) {
         core::json::escape(path), size, truncated ? "true" : "false", line_count, lines_json);
 }
 
-} // namespace wayer::preview
+} // namespace waydirect::preview
+

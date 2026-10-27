@@ -1,14 +1,14 @@
-// wayer_storage — shared walk primitive. See include/wayer/storage/walker.hpp.
-#include <wayer/storage/walker.hpp>
+﻿// wayer_storage â€” shared walk primitive. See include/wayer/storage/walker.hpp.
+#include <waydirect/storage/walker.hpp>
 
-#include <wayer/storage/safety.hpp>
+#include <waydirect/storage/safety.hpp>
 
 #include <filesystem>
 #include <functional>
 #include <string>
 #include <system_error>
 
-namespace wayer::storage {
+namespace waydirect::storage {
 
     void walk_files(const std::string& root, const std::function<void(const fs::directory_entry&)>& visit) {
         std::error_code ec;
@@ -52,4 +52,5 @@ namespace wayer::storage {
         }
     }
 
-} // namespace wayer::storage
+} // namespace waydirect::storage
+

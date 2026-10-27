@@ -1,11 +1,11 @@
-// wayer_storage — file-backed index: build / meta / search.
+﻿// wayer_storage â€” file-backed index: build / meta / search.
 // See include/wayer/storage/index.hpp.
-#include <wayer/storage/index.hpp>
+#include <waydirect/storage/index.hpp>
 
-#include <wayer/core/json_util.hpp>
-#include <wayer/core/paths.hpp>
-#include <wayer/core/text.hpp>
-#include <wayer/storage/walker.hpp>
+#include <waydirect/core/json_util.hpp>
+#include <waydirect/core/paths.hpp>
+#include <waydirect/core/text.hpp>
+#include <waydirect/storage/walker.hpp>
 
 #include <algorithm>
 #include <array>
@@ -19,7 +19,7 @@
 #include <string_view>
 #include <system_error>
 
-namespace wayer::storage {
+namespace waydirect::storage {
 namespace fs = std::filesystem;
 
 namespace {
@@ -40,15 +40,15 @@ constexpr std::size_t kHardMaxResults = 200;
             out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
             out += static_cast<char>(0x80 | (cp & 0x3F));
         } else {
-            // Outside BMP — emit replacement char; indexed paths never need more.
+            // Outside BMP â€” emit replacement char; indexed paths never need more.
             out += static_cast<char>(0xEF);
             out += static_cast<char>(0xBF);
             out += static_cast<char>(0xBD);
         }
     }
     
-// Plain data + one free function, kept chunk-wise so the index file —
-// which can be many megabytes — is never loaded fully into memory.
+// Plain data + one free function, kept chunk-wise so the index file â€”
+// which can be many megabytes â€” is never loaded fully into memory.
 struct CharStream {
     std::istream& in;
     std::array<char, 8192> buf{};
@@ -167,7 +167,7 @@ bool stream_next(CharStream& cs, char& c) {
         if (ec) return R"({"status":"missing"})";
         // Map the file clock onto the system clock without std::chrono::clock_cast,
         // which desktop toolchains have but NDK libc++ still lacks. Both clocks are
-        // sampled back-to-back and assumed to tick at the same rate — plenty for
+        // sampled back-to-back and assumed to tick at the same rate â€” plenty for
         // second-resolution metadata.
         const auto age = ftime - fs::file_time_type::clock::now();
         const auto sys_tp = std::chrono::system_clock::now() +
@@ -194,7 +194,7 @@ bool stream_next(CharStream& cs, char& c) {
         if (in) {
             CharStream cs{in};
                 // Seek: "files" key, then its opening '['.
-                // (Only parses files this module wrote — see build_index.)
+                // (Only parses files this module wrote â€” see build_index.)
                 char c = 0;
                 std::string lit;
                 bool in_array = false;
@@ -224,7 +224,7 @@ bool stream_next(CharStream& cs, char& c) {
                     if (c == ',') continue;
                     if (is_ws(c)) continue;
                     if (c != '"') {
-                        done = true; // malformed — stop cleanly, keep what we have
+                        done = true; // malformed â€” stop cleanly, keep what we have
                         break;
                     }
                 if (!parse_string(cs, candidate)) break;
@@ -253,4 +253,5 @@ std::string search_index_to_file(const std::string& query, std::size_t max_resul
     return std::format(R"({{"status":"ok","path":"{}"}})", core::json::escape(out_path));
 }
 
-} // namespace wayer::storage
+} // namespace waydirect::storage
+
