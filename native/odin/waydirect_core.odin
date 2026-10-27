@@ -288,7 +288,7 @@ dispatch_action :: proc(action_id: int, payload: string) -> cstring {
 		if len(parts) < 2 || len(parts[0]) == 0 || len(parts[1]) == 0 {
 			return reply(BAD_PAYLOAD)
 		}
-		return reply_c(build_index_odin(cs(parts[0]), cs(parts[1])))
+		return reply(storage.build_index_odin(parts[0], parts[1]))
 
 	case ACTION_INDEX_META:
 		// payload: index_path (or "" â†’ use default; handled here as bad_payload)
