@@ -94,19 +94,19 @@ ensure_one :: proc(dir: string) -> DirEnsure {
 	sz: i64
 	mt: i64
 	is_dir: c.int
-	if fs.wayer_fs_stat(c_path, &sz, &mt, &is_dir) == 0 && is_dir == 1 {
+	if fs.fs_stat(c_path, &sz, &mt, &is_dir) == 0 && is_dir == 1 {
 		d.existed = true
 		d.ready = true
 		return d
 	}
 
 	// Create with parents via C mkdir -p
-	if fs.wayer_fs_mkdir_p(c_path) != 0 {
+	if fs.fs_mkdir_p(c_path) != 0 {
 		return d // ready stays false
 	}
 
 	// Verify it is now a directory
-	if fs.wayer_fs_stat(c_path, &sz, &mt, &is_dir) == 0 && is_dir == 1 {
+	if fs.fs_stat(c_path, &sz, &mt, &is_dir) == 0 && is_dir == 1 {
 		d.ready = true
 	}
 	return d
@@ -182,7 +182,7 @@ write_paths_manifest :: proc(report: AppDirsReport) -> string {
 
 	// Write via C wrapper (bionic-safe, creates no temp os.File)
 	c_manifest := cstr(manifest_path)
-	if fs.wayer_fs_write_file(c_manifest, raw_data(json), len(json)) != 0 {
+	if fs.fs_write_file(c_manifest, raw_data(json), len(json)) != 0 {
 		return ""
 	}
 
@@ -203,13 +203,13 @@ set_app_paths :: proc(paths: AppPaths) {
 
 	// Ensure directories exist even if caller built AppPaths manually.
 	if len(app_paths.cache) > 0 {
-		fs.wayer_fs_mkdir_p(cstr(app_paths.cache))
+		fs.fs_mkdir_p(cstr(app_paths.cache))
 	}
 	if len(app_paths.temp) > 0 {
-		fs.wayer_fs_mkdir_p(cstr(app_paths.temp))
+		fs.fs_mkdir_p(cstr(app_paths.temp))
 	}
 	if len(app_paths.logs) > 0 {
-		fs.wayer_fs_mkdir_p(cstr(app_paths.logs))
+		fs.fs_mkdir_p(cstr(app_paths.logs))
 	}
 }
 

@@ -33,18 +33,18 @@ import js_util "../../json_utils/src"
 // Uses the bionic-safe WayerFsDir API (opendir/readdir/stat, no statx).
 list_files :: proc(path: string) -> string {
 	c_path := strings.clone_to_cstring(path, context.temp_allocator)
-	d := fs.wayer_fs_opendir(c_path)
+	d := fs.fs_opendir(c_path)
 	if d == nil {
 		return `{"error":"invalid_directory"}`
 	}
-	defer fs.wayer_fs_closedir(d)
+	defer fs.fs_closedir(d)
 
 	sb := strings.builder_make(context.temp_allocator)
 	strings.write_string(&sb, `{"files":[`)
 
 	first := true
-	ent: fs.WayerFsEntry
-	for fs.wayer_fs_readdir(d, &ent) != 0 {
+	ent: fs.WaydirectFsEntry
+	for fs.fs_readdir(d, &ent) != 0 {
 		//turn the cstring + length to odin string with zero allocation
 		name := string(([^]u8)(ent.name)[:ent.name_len])
 		if !first {

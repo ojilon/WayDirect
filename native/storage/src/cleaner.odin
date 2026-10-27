@@ -26,7 +26,7 @@
 //   manual versions even when bytes differ.
 //
 // Android 10 / bionic
-//   * All file reads via fs_android read_file_c → wayer_fs_read_file (open/read)
+//   * All file reads via fs_android read_file_c → fs_read_file (open/read)
 //   * Hash uses FNV-1a (no external crypto lib needed; fast on mobile)
 //   * Sorting via core:slice / core:sort equivalents (Odin Oct 2025)
 //
@@ -620,5 +620,5 @@ walk_files_with_ctx :: proc(root: string, cb: WalkWithCtxCb, ud: rawptr) {
 		ud: rawptr,
 	}{cb, ud}
 	c_root := strings.clone_to_cstring(root, context.temp_allocator)
-	fs.wayer_fs_walk_files(c_root, walk_ctx_inner, &wrapper)
+	fs.fs_walk_files(c_root, walk_ctx_inner, &wrapper)
 }
