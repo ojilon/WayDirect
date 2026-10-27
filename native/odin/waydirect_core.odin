@@ -313,7 +313,7 @@ dispatch_action :: proc(action_id: int, payload: string) -> cstring {
 		if query_from < len(parts) {
 			query = strings.join(parts[query_from:], "|", context.temp_allocator)
 		}
-		return reply_c(search_index_to_file_odin(cs(query), max_results, cs(parts[0]), cs(parts[1])))
+		return reply(storage.search_index_to_file_odin(query, max_results, parts[0], parts[1]))
 
 	case ACTION_READ_TEXT_FILE:
 		path, max_bytes := split_trailing_number(payload, 0)
