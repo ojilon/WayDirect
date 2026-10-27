@@ -339,7 +339,7 @@ dispatch_action :: proc(action_id: int, payload: string) -> cstring {
 		if len(parts) > 3 {
 			if v, ok := strconv.parse_int(parts[3], 10); ok { max_per_day = v }
 		}
-		return reply_c(group_index_by_day_odin(cs(parts[1]), cs(parts[0]), c.int(max_days), c.int(max_per_day)))
+		return reply(storage.group_index_by_day_odin(parts[1], parts[0], max_days, max_per_day))
 	}
 
 	core_heart.error("waydirectEngine", "unknown action from Java")
