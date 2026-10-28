@@ -94,8 +94,7 @@ public class StorageFragment extends Fragment {
         try {
             StatsSnapshot s = StatsSnapshot.parse(rawJson);
     
-            binding.storageSummary.setText(
-                    formatSize(s.usedBytes) + " used of " + formatSize(s.totalBytes));
+            binding.storageSummary.setText(formatSize(s.usedBytes) + " used of " + formatSize(s.totalBytes));
             binding.storageFree.setText(formatSize(s.freeBytes) + " free");
     
             if (binding.catImages != null) binding.catImages.setText(formatSize(s.images));
