@@ -72,21 +72,22 @@ $OdinPrefix = Join-Path $ObjDir "waydirect_engine"
 # Clean stale Odin objects
 Get-ChildItem -Path $ObjDir -Filter "waydirect_engine-*.o" -ErrorAction SilentlyContinue | Remove-Item -Force
 
-$OdinArgs = New-Object System.Collections.ArrayList
-$OdinArgs.Add("build")
-$OdinArgs.Add($OdinSrc)
-$OdinArgs.Add("-build-mode:obj")
-$OdinArgs.Add("-target:$OdinTarget")
-$OdinArgs.Add("-reloc-mode:pic")
-$OdinArgs.Add("-no-entry-point")
-$OdinArgs.Add("-out:$OdinPrefix")
-if ($OdinSubTarget) { $OdinArgs.Add($OdinSubTarget) }
+$OdinArgs = @(
+    "build",
+    $OdinSrc,
+    "-build-mode:obj",
+    "-target:$OdinTarget",
+    "-reloc-mode:pic",
+    "-no-entry-point",
+    "-out:$OdinPrefix"
+)
+if ($OdinSubTarget) { $OdinArgs += $OdinSubTarget }
 
 # Push to Odin dir so LLVM finds its resources, then pop back.
 Push-Location $OdinDir
 try {
     $OdinEnv = @{ "ODIN_ANDROID_NDK" = $NdkRoot }
-    $OdinOutput = & $Odin.Source $OdinArgs.ToArray() 2>&1
+    $OdinOutput = & $Odin.Source @OdinArgs 2>&1
     Write-Host $OdinOutput
 } finally {
     Pop-Location
