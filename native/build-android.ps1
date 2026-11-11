@@ -65,6 +65,20 @@ $LibOut     = Join-Path $OutDir "libWayDirect_engine.so"
 if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir -Force | Out-Null }
 if (-not (Test-Path $ObjDir)) { New-Item -ItemType Directory -Path $ObjDir -Force | Out-Null }
 
+# --- helper: run a command via cmd /c from a working directory ----------------
+function Run-Cmd($cmd, $workDir) {
+    Push-Location $workDir
+    try {
+        $full = "cmd /c `"$cmd`""
+        if ($Verbose) { Write-Host "  [cmd] $cmd" }
+        $out = & $full 2>&1
+        Write-Host $out
+    } finally {
+        Pop-Location
+    }
+    return $LASTEXITCODE
+}
+
 # --- step 1: build Odin sources into object files -----------------------------
 Write-Host "`n[1/4] Building Odin sources with odin build ..."
 $OdinPrefix = Join-Path $ObjDir "waydirect_engine"
@@ -83,11 +97,11 @@ $OdinArgs = @(
 )
 if ($OdinSubTarget) { $OdinArgs += $OdinSubTarget }
 
-# Push to Odin dir so LLVM finds its resources, then pop back.
+$OdinCmdLine = $OdinArgs -join ' '
+if ($Verbose) { Write-Host "  Running: $($Odin.Source) $OdinCmdLine" }
 Push-Location $OdinDir
 try {
-    $OdinEnv = @{ "ODIN_ANDROID_NDK" = $NdkRoot }
-    $OdinOutput = & $Odin.Source @OdinArgs 2>&1
+    $OdinOutput = & (Join-Path $OdinDir "odin.exe") $OdinCmdLine 2>&1
     Write-Host $OdinOutput
 } finally {
     Pop-Location
@@ -157,14 +171,11 @@ foreach ($src in $CppSources) {
     $objFile = Join-Path $ObjDir ($baseName + ".o")
     $CppObjFiles += $objFile
 
-    $CmdArgs = @(
-        $Clang
-    ) + $ClangFlags + @(
-        "-c", $srcPath, "-o", $objFile
-    )
+    $CmdArgs = @($Clang) + $ClangFlags + @("-c", $srcPath, "-o", $objFile)
+    $CmdLine = $CmdArgs -join ' '
 
     if ($Verbose) { Write-Host "  clang++ $src -> $objFile" }
-    $CmdOutput = & $CmdArgs 2>&1
+    $CmdOutput = & "cmd" "/c`"$CmdLine`"" 2>&1
     Write-Host $CmdOutput
     if ($LASTEXITCODE -ne 0) { throw "clang++ failed for $src" }
 }
@@ -190,8 +201,9 @@ $LinkArgs = @(
     "-llog", "-landroid", "-lEGL", "-lGLESv2"
 )
 
+$LinkLine = $LinkArgs -join ' '
 if ($Verbose) { Write-Host "  Linking $($AllObjs.Count) objects into $LibOut" }
-$LinkOutput = & $LinkArgs 2>&1
+$LinkOutput = & "cmd" "/c`"$LinkLine`"" 2>&1
 Write-Host $LinkOutput
 if ($LASTEXITCODE -ne 0) { throw "Link failed" }
 
