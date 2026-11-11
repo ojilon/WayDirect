@@ -70,7 +70,10 @@ $Odin = Get-Command "odin" -ErrorAction SilentlyContinue
 if (-not $Odin) {
     throw "odin not found on PATH. Install from https://odin-lang.org"
 }
+# odin.exe must run from its own directory (LLVM loads relative resources).
+$OdinDir = Split-Path $Odin.Source -Parent
 Write-Host "Odin compiler: $($Odin.Source)"
+Write-Host "Odin dir:      $OdinDir"
 
 # --- directories --------------------------------------------------------------
 $NativeRoot = Resolve-Path "."
@@ -99,8 +102,14 @@ $OdinArgs = @(
 )
 if ($OdinSubTarget) { $OdinArgs += $OdinSubTarget }
 
-$OdinEnv = @{ "ODIN_ANDROID_NDK" = $NdkRoot }
-& $Odin.Source @OdinArgs | Out-String
+# Push to Odin dir so LLVM finds its resources, then pop back.
+Push-Location $OdinDir
+try {
+    $OdinEnv = @{ "ODIN_ANDROID_NDK" = $NdkRoot }
+    & $Odin.Source @OdinArgs | Out-String
+} finally {
+    Pop-Location
+}
 if ($LASTEXITCODE -ne 0) { throw "Odin build failed" }
 
 # Collect Odin object files
