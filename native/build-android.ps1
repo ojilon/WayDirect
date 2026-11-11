@@ -7,12 +7,11 @@
 #   * llvm-ar             — to archive objects into a shared library
 #
 # Usage (from repo root):
-#   pwsh native/build-android.ps1
+#   powershell -File native/build-android.ps1
 #
-# Environment (set these or export before running):
+# Environment (set these before running):
 #   $env:ODIN_ANDROID_NDK   — Android NDK root (default: D:\Dev\AndroidCLI\sdk\ndk\30.0.16248370)
 #   $env:ODIN_ANDROID_SDK   — Android SDK root (default: D:\Dev\AndroidCLI\sdk)
-#   $env:JAVA_HOME          — JDK root (needed only if you also run odin bundle android)
 #
 # Output:
 #   native/build/arm64-v8a/libWayDirect_engine.so
@@ -20,11 +19,11 @@
 # =============================================================================
 
 param(
-    [string]$TargetAbi   = "arm64-v8a",
-    [string]$OdinTarget  = "linux_arm64",
-    [string]$OdinSubTarget = "-subtarget:android",
-    [int]$MinApi         = 29,
-    [string]$BuildDir    = "native/build",
+    [string]$TargetAbi      = "arm64-v8a",
+    [string]$OdinTarget     = "linux_arm64",
+    [string]$OdinSubTarget  = "-subtarget:android",
+    [int]$MinApi            = 29,
+    [string]$BuildDir       = "native/build",
     [switch]$Verbose
 )
 
@@ -40,30 +39,11 @@ if (-not (Test-Path $NdkRoot)) {
     throw "NDK not found at $NdkRoot. Set ODIN_ANDROID_NDK."
 }
 
-# NDK clang for C/C++ compilation (windows-x86_64 host)
+# NDK clang++ for C/C++ compilation (windows-x86_64 host)
 $Clang = Join-Path $NdkRoot "toolchains\llvm\prebuilt\windows-x86_64\bin\clang++.exe"
 if (-not (Test-Path $Clang)) {
     throw "clang++ not found at $Clang"
 }
-$LlvmAr = Join-Path $NdkRoot "toolchains\llvm\prebuilt\windows-x86_64\bin\llvm-ar.exe"
-if (-not (Test-Path $LlvmAr)) {
-    throw "llvm-ar not found at $LlvmAr"
-}
-
-# Android platform (for libc++ / system libs)
-$AndroidPlatform = "android-$MinApi"
-$ClangFlags = @(
-    "-target", "aarch64-linux-android$MinApi",
-    "-DANDROID",
-    "-D__ANDROID_API__=$MinApi",
-    "-fPIC",
-    "-O2",
-    "-Wall",
-    "-Wextra",
-    "-I", (Join-Path $NdkRoot "sysroot\usr\include\aarch64-linux-android"),
-    "-I", (Join-Path $NdkRoot "sysroot\usr\include"),
-    "--sysroot", (Join-Path $NdkRoot "sysroot"),
-)
 
 # --- locate Odin compiler -----------------------------------------------------
 $Odin = Get-Command "odin" -ErrorAction SilentlyContinue
@@ -92,21 +72,22 @@ $OdinPrefix = Join-Path $ObjDir "waydirect_engine"
 # Clean stale Odin objects
 Get-ChildItem -Path $ObjDir -Filter "waydirect_engine-*.o" -ErrorAction SilentlyContinue | Remove-Item -Force
 
-$OdinArgs = @(
-    "build", $OdinSrc,
-    "-build-mode:obj",
-    "-target:$OdinTarget",
-    "-reloc-mode:pic",
-    "-no-entry-point",
-    "-out:" + $OdinPrefix,
-)
-if ($OdinSubTarget) { $OdinArgs += $OdinSubTarget }
+$OdinArgs = New-Object System.Collections.ArrayList
+$OdinArgs.Add("build")
+$OdinArgs.Add($OdinSrc)
+$OdinArgs.Add("-build-mode:obj")
+$OdinArgs.Add("-target:$OdinTarget")
+$OdinArgs.Add("-reloc-mode:pic")
+$OdinArgs.Add("-no-entry-point")
+$OdinArgs.Add("-out:$OdinPrefix")
+if ($OdinSubTarget) { $OdinArgs.Add($OdinSubTarget) }
 
 # Push to Odin dir so LLVM finds its resources, then pop back.
 Push-Location $OdinDir
 try {
     $OdinEnv = @{ "ODIN_ANDROID_NDK" = $NdkRoot }
-    & $Odin.Source @OdinArgs | Out-String
+    $OdinOutput = & $Odin.Source $OdinArgs.ToArray() 2>&1
+    Write-Host $OdinOutput
 } finally {
     Pop-Location
 }
@@ -115,7 +96,6 @@ if ($LASTEXITCODE -ne 0) { throw "Odin build failed" }
 # Collect Odin object files
 $OdinObjFiles = Get-ChildItem -Path $ObjDir -Filter "waydirect_engine-*.o" -ErrorAction SilentlyContinue
 if (-not $OdinObjFiles) {
-    # Some Odin versions emit a single file without suffix
     $OdinObjFiles = Get-ChildItem -Path $ObjDir -Filter "waydirect_engine.o" -ErrorAction SilentlyContinue
 }
 if (-not $OdinObjFiles) {
@@ -156,6 +136,22 @@ $CppSources = @(
     "file_system_bridge/src/android_fs.c",
 )
 
+$ClangFlags = New-Object System.Collections.ArrayList
+$ClangFlags.Add("-target")
+$ClangFlags.Add("aarch64-linux-android$MinApi")
+$ClangFlags.Add("-DANDROID")
+$ClangFlags.Add("-D__ANDROID_API__=$MinApi")
+$ClangFlags.Add("-fPIC")
+$ClangFlags.Add("-O2")
+$ClangFlags.Add("-Wall")
+$ClangFlags.Add("-Wextra")
+$ClangFlags.Add("-I")
+$ClangFlags.Add((Join-Path $NdkRoot "sysroot\usr\include\aarch64-linux-android"))
+$ClangFlags.Add("-I")
+$ClangFlags.Add((Join-Path $NdkRoot "sysroot\usr\include"))
+$ClangFlags.Add("--sysroot")
+$ClangFlags.Add((Join-Path $NdkRoot "sysroot"))
+
 $CppObjFiles = New-Object System.Collections.ArrayList
 foreach ($src in $CppSources) {
     $srcPath = Join-Path $NativeRoot $src
@@ -167,34 +163,50 @@ foreach ($src in $CppSources) {
     $objFile = Join-Path $ObjDir ($baseName + ".o")
     $CppObjFiles.Add($objFile)
 
-    $CmdArgs = @($Clang, @($ClangFlags), "-c", $srcPath, "-o", $objFile)
+    $CmdArgs = New-Object System.Collections.ArrayList
+    $CmdArgs.Add($Clang)
+    foreach ($f in $ClangFlags) { $CmdArgs.Add($f) }
+    $CmdArgs.Add("-c")
+    $CmdArgs.Add($srcPath)
+    $CmdArgs.Add("-o")
+    $CmdArgs.Add($objFile)
+
     if ($Verbose) { Write-Host "  clang++ $src -> $objFile" }
-    & $CmdArgs | Out-String
+    $CmdOutput = & $CmdArgs.ToArray() 2>&1
+    Write-Host $CmdOutput
     if ($LASTEXITCODE -ne 0) { throw "clang++ failed for $src" }
 }
 Write-Host "C/C++ objects: $($CppObjFiles.Count) files"
 
-# --- step 3: archive into shared library --------------------------------------
-Write-Host "`n[3/4] Archiving into libWayDirect_engine.so ..."
+# --- step 3: link into shared library -----------------------------------------
+Write-Host "`n[3/4] Linking libWayDirect_engine.so ..."
 
 # Remove old output
 if (Test-Path $LibOut) { Remove-Item -Path $LibOut -Force }
 
-# Link with clang++ into a shared object
-$AllObjs = @($OdinObjFiles) + @($CppObjFiles)
-$LinkArgs = @(
-    $Clang,
-    "-shared",
-    "-target", "aarch64-linux-android$MinApi",
-    "--sysroot", (Join-Path $NdkRoot "sysroot"),
-    "-o", $LibOut,
-)
-$LinkArgs += $AllObjs
+$AllObjs = New-Object System.Collections.ArrayList
+foreach ($o in $OdinObjFiles) { $AllObjs.Add($o.FullName) }
+foreach ($o in $CppObjFiles) { $AllObjs.Add($o) }
+
+$LinkArgs = New-Object System.Collections.ArrayList
+$LinkArgs.Add($Clang)
+$LinkArgs.Add("-shared")
+$LinkArgs.Add("-target")
+$LinkArgs.Add("aarch64-linux-android$MinApi")
+$LinkArgs.Add("--sysroot")
+$LinkArgs.Add((Join-Path $NdkRoot "sysroot"))
+$LinkArgs.Add("-o")
+$LinkArgs.Add($LibOut)
+foreach ($o in $AllObjs) { $LinkArgs.Add($o) }
 # Link Android system libs
-$LinkArgs += @("-llog", "-landroid", "-lEGL", "-lGLESv2")
+$LinkArgs.Add("-llog")
+$LinkArgs.Add("-landroid")
+$LinkArgs.Add("-lEGL")
+$LinkArgs.Add("-lGLESv2")
 
 if ($Verbose) { Write-Host "  Linking $($AllObjs.Count) objects into $LibOut" }
-& $LinkArgs | Out-String
+$LinkOutput = & $LinkArgs.ToArray() 2>&1
+Write-Host $LinkOutput
 if ($LASTEXITCODE -ne 0) { throw "Link failed" }
 
 Write-Host "Created: $LibOut"
