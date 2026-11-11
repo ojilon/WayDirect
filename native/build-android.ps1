@@ -74,7 +74,7 @@ Write-Host "Odin compiler: $($Odin.Source)"
 
 # --- directories --------------------------------------------------------------
 $NativeRoot = Resolve-Path "."
-$OdinSrc    = Join-Path $NativeRoot "odin"
+$OdinSrc    = Join-Path $NativeRoot "jni"        # entry package: waydirect_jni (imports waydirect_core transitively)
 $OutDir     = Join-Path $BuildDir $TargetAbi
 $ObjDir     = Join-Path $BuildDir "obj"
 $LibOut     = Join-Path $OutDir "libWayDirect_engine.so"
@@ -84,10 +84,10 @@ if (-not (Test-Path $ObjDir)) { New-Item -ItemType Directory -Path $ObjDir -Forc
 
 # --- step 1: build Odin sources into object files -----------------------------
 Write-Host "`n[1/4] Building Odin sources with odin build ..."
-$OdinObjects = Join-Path $ObjDir "waydirect_core_odin-*.o"
+$OdinPrefix = Join-Path $ObjDir "waydirect_engine"
 
 # Clean stale Odin objects
-Get-ChildItem -Path $ObjDir -Filter "waydirect_core_odin-*.o" -ErrorAction SilentlyContinue | Remove-Item -Force
+Get-ChildItem -Path $ObjDir -Filter "waydirect_engine-*.o" -ErrorAction SilentlyContinue | Remove-Item -Force
 
 $OdinArgs = @(
     "build", $OdinSrc,
@@ -95,7 +95,7 @@ $OdinArgs = @(
     "-target:$OdinTarget",
     "-reloc-mode:pic",
     "-no-entry-point",
-    "-out:" + (Join-Path $ObjDir "waydirect_core_odin"),
+    "-out:" + $OdinPrefix,
 )
 if ($OdinSubTarget) { $OdinArgs += $OdinSubTarget }
 
@@ -104,10 +104,10 @@ $OdinEnv = @{ "ODIN_ANDROID_NDK" = $NdkRoot }
 if ($LASTEXITCODE -ne 0) { throw "Odin build failed" }
 
 # Collect Odin object files
-$OdinObjFiles = Get-ChildItem -Path $ObjDir -Filter "waydirect_core_odin-*.o" -ErrorAction SilentlyContinue
+$OdinObjFiles = Get-ChildItem -Path $ObjDir -Filter "waydirect_engine-*.o" -ErrorAction SilentlyContinue
 if (-not $OdinObjFiles) {
     # Some Odin versions emit a single file without suffix
-    $OdinObjFiles = Get-ChildItem -Path $ObjDir -Filter "waydirect_core_odin.o" -ErrorAction SilentlyContinue
+    $OdinObjFiles = Get-ChildItem -Path $ObjDir -Filter "waydirect_engine.o" -ErrorAction SilentlyContinue
 }
 if (-not $OdinObjFiles) {
     throw "Odin produced no object files in $ObjDir"
