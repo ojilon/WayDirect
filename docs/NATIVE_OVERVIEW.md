@@ -162,7 +162,7 @@ Documents the contract above so future Odin files know to include `android_fs.h`
 
 1. Drop `foo.odin` anywhere under `native/` (e.g. `native/storage/src/foo.odin`).
 2. Make it `package storage` (or the owning module's package) so `storage.odin` faÃ§ade covers it.
-3. Import it from an already-imported package (`WayDirect_core.odin` imports `storage`) so CMake's `GLOB_RECURSE` + `CONFIGURE_DEPENDS` picks it up without editing `CMakeLists.txt`.
+3. Import it from an already-imported package (`WayDirect_core.odin` imports `storage`) so `build-android.ps1` picks it up on the next run without editing the build script.
 4. For filesystem: call `stat_c`/`walk_files_c`/etc. from `fs_android.odin` â€” never `os.*`.
 5. For large replies: write to a file under `core_heart.get_app_paths().cache` and return `{status, path}`; Java reads via `PathCache.readFile`.
 6. Document the proc's JNI action ID in `NativeEngine.java` + `WayDirect_core.odin` header.
@@ -170,9 +170,8 @@ Documents the contract above so future Odin files know to include `android_fs.h`
 Build:
 
 ```bash
-odin check native/odin                 # syntax check
-cmake -S native -B /tmp/b -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=29 -DCMAKE_TOOLCHAIN_FILE=$NDK/build/cmake/android.toolchain.cmake
-cmake --build /tmp/b --target WayDirect_engine
+odin check native/jni                  # syntax check (waydirect_jni imports waydirect_core transitively)
+pwsh native/build-android.ps1          # builds libWayDirect_engine.so via odin build + NDK clang
 ```
 
 
