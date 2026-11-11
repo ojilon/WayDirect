@@ -1,12 +1,13 @@
 // =============================================================================
-// waydirect_core.odin â€” Odin entry package (the only package CMake builds)
+// waydirect_core.odin â€” Odin entry package (built by native/build-android.ps1)
 //
-// This is the package that `native/CMakeLists.txt` asks the Odin compiler to
-// build into libwaydirect_core_odin.a. It owns:
+// This package is built by `native/build-android.ps1` via `odin build native/jni`
+// (waydirect_jni imports waydirect_core transitively). It is linked into
+// libWayDirect_engine.so together with the C/C++ FFI object files. It owns:
 //
 //   1. The action-id router (route_action) â€” Java's NativeEngine.java
 //      calls processAction(actionId, payload) â†’ JNI â†’ route_action.
-//   2. The exported C ABI that jni/waydirect_engine.c links (list_files,
+//   2. The exported C ABI that jni/waydirect_jni.odin calls (list_files,
 //      get_network_info, etc.) â€” these replace the old waydirect_shim.cpp
 //      once the Odin side is considered canonical.
 //
@@ -21,10 +22,10 @@
 //
 // To add a new .odin file, drop it anywhere under native/ and import it from
 // an already-imported package (e.g. waydirect_core.odin or storage.odin).
-// CMake's GLOB_RECURSE with CONFIGURE_DEPENDS picks it up automatically.
+// build-android.ps1 picks it up on the next run.
 //
-// Odin October 2025 + Android 10 notes
-//   * Target: linux_arm64 + -subtarget:android (see native/CMakeLists.txt)
+// Odin + Android 10 notes
+//   * Target: linux_arm64 + -subtarget:android (see native/build-android.ps1)
 //   * ODIN_OS check uses enum `.Android` not string "android"
 //   * core:os file ops are NOT used for filesystem â€” all I/O via C wrappers
 //     in android_fs.c (opendir/readdir/stat only; no statx â†’ bionic-safe on
