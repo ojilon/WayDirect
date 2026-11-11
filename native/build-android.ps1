@@ -133,7 +133,7 @@ $CppSources = @(
     "transfer/src/transfer_shim.c",
     "media/src/media_placeholder.cpp",
     "preview/src/preview.cpp",
-    "file_system_bridge/src/android_fs.c",
+    "file_system_bridge/src/android_fs.c"
 )
 
 $ClangFlags = New-Object System.Collections.ArrayList
