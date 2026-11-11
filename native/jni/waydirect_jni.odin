@@ -4,7 +4,8 @@
 // Uses the official Odin Android bindings instead of hand-written C + <jni.h>:
 //
 //   * core:sys/android/jni.odin   — JNI types (JNIEnv, jstring, jint, ...)
-//   * vendor:android/java/java.odin — string_from(), string_to(), ...
+//   * core:sys/android/jni_env.odin — jni_env(), jni_set_vm(), jni_take_exception()
+//   * vendor:android/java/java.odin — string_from(), string_to(), delete_local(), ...
 //
 // Exported symbols match NativeEngine.java's native method names:
 //   Java_com_waydirect_bridge_NativeEngine_initEngine
@@ -57,23 +58,30 @@ Java_com_waydirect_bridge_NativeEngine_processAction :: proc "c" (env: ^android.
     defer free_all(context.temp_allocator)
 
     // --- Java String -> Odin string ---------------------------------------
-    native_str, exc := java.string_to(payload)
-    if exc != nil {
-        java.delete_local(exc)
-        empty, e2 := java.string_from("")
-        if e2 != nil { java.delete_local(e2) }
+    // jstring is jobject (rawptr); java.string_to expects ^String (Odin's String ref).
+    native_str, conv_exc := java.string_to((^java.String)(payload))
+    if conv_exc != nil {
+        java.delete_local(conv_exc)
+        empty, empty_exc := java.string_from("")
+        if empty_exc != nil {
+            java.delete_local(empty_exc)
+        }
         return empty
     }
 
     // --- Call Odin router -------------------------------------------------
-    response := waydirect_core.route_action(int(action_id), native_str)
+    // route_action :: proc "c" (action_id: c.int, payload: cstring) -> cstring
+    response := waydirect_core.route_action(c.int(action_id), cstring(native_str))
 
     // --- Odin string -> Java String ---------------------------------------
-    result, exc := java.string_from(response)
-    if exc != nil {
-        java.delete_local(exc)
-        empty, e2 := java.string_from("")
-        if e2 != nil { java.delete_local(e2) }
+    // string_from expects string, response is cstring -> convert.
+    result, result_exc := java.string_from(string(response))
+    if result_exc != nil {
+        java.delete_local(result_exc)
+        empty, empty_exc := java.string_from("")
+        if empty_exc != nil {
+            java.delete_local(empty_exc)
+        }
         return empty
     }
     return result

@@ -26,14 +26,8 @@ import "core:strings"
 // ---------------------------------------------------------------------------
 // C FFI — Android log bridge
 // ---------------------------------------------------------------------------
-
-foreign import libc "system:c"
-
-@(default_calling_convention = "c")
-foreign libc {
-	// Android NDK: <android/log.h>. Priority values match android/log.h.
-	__android_log_print :: proc(prio: c.int, tag: cstring, fmt: cstring, msg: cstring) -> c.int ---
-}
+// __android_log_print is provided by core:sys/android/log.odin (imported via
+// waydirect_jni's `import android "core:sys/android"`). Do not redeclare here.
 
 // LogLevel mirrors the C++ priority mapping.
 LogLevel :: enum {
