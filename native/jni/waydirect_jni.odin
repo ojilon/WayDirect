@@ -71,7 +71,8 @@ Java_com_waydirect_bridge_NativeEngine_processAction :: proc "c" (env: ^android.
 
     // --- Call Odin router -------------------------------------------------
     // route_action :: proc "c" (action_id: c.int, payload: cstring) -> cstring
-    response := waydirect_core.route_action(c.int(action_id), cstring(native_str))
+    c_path := strings.clone_to_cstring(native_str, context.temp_allocator)
+    response := waydirect_core.route_action(c.int(action_id), c_path)
 
     // --- Odin string -> Java String ---------------------------------------
     // string_from expects string, response is cstring -> convert.
