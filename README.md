@@ -29,16 +29,22 @@ odin version          # â†’ dev-2025-10 (OCT 2025) or newer
 
 Set the PC address in `app/.../core/Config.java` (`HOST` / `PORT`) before Transfer tests.
 
-### Odin build (what Gradle does)
+### Odin build (replaces CMake/Gradle externalNativeBuild)
 
 ```
-native/CMakeLists.txt â†’ discovers all *.odin under native/ (GLOB_RECURSE + CONFIGURE_DEPENDS)
-                     â†’ `odin build native/odin -build-mode:obj -target:linux_arm64 -subtarget:android`
-                     â†’ packs .o â†’ libWayDirect_core_odin.a (via NDK llvm-ar)
-                     â†’ jni/ links it + C++ modules + C wrappers into libWayDirect_engine.so
+pwsh native/build-android.ps1
+   â†’ `odin build native/jni -build-mode:obj -target:linux_arm64 -subtarget:android -reloc-mode:pic -no-entry-point`
+   â†’ compiles C/C++ FFI with NDK clang++
+   â†’ links into native/build/arm64-v8a/libWayDirect_engine.so
 ```
 
-Add a new `.odin` file anywhere under `native/` and import it from an already-imported package (e.g. `WayDirect_core.odin`) â€” CMake notices it on next configure, no CMake edit needed.
+Then Gradle packages Java + resources + the pre-built `.so`:
+
+```
+./gradlew assembleDebug
+```
+
+Add a new `.odin` file anywhere under `native/` and import it from an already-imported package (e.g. `WayDirect_core.odin`) — `build-android.ps1` picks it up on next run, no build script edit needed.
 
 ---
 
