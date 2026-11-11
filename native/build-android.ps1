@@ -56,8 +56,8 @@ Write-Host "Odin compiler: $($Odin.Source)"
 Write-Host "Odin dir:      $OdinDir"
 
 # --- directories --------------------------------------------------------------
-$NativeRoot = Resolve-Path "."
-$OdinSrc    = Join-Path $NativeRoot "jni"        # entry package: waydirect_jni (imports waydirect_core transitively)
+$NativeRoot = Join-Path (Resolve-Path ".") "native"
+$OdinSrc    = Join-Path $NativeRoot "jni"           # entry package: waydirect_jni (imports waydirect_core transitively)
 $OutDir     = Join-Path $BuildDir $TargetAbi
 $ObjDir     = Join-Path $BuildDir "obj"
 $LibOut     = Join-Path $OutDir "libWayDirect_engine.so"
