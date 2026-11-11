@@ -137,23 +137,16 @@ $CppSources = @(
     "file_system_bridge/src/android_fs.c"
 )
 
-$ClangFlags = New-Object System.Collections.ArrayList
-$ClangFlags.Add("-target")
-$ClangFlags.Add("aarch64-linux-android$MinApi")
-$ClangFlags.Add("-DANDROID")
-$ClangFlags.Add("-D__ANDROID_API__=$MinApi")
-$ClangFlags.Add("-fPIC")
-$ClangFlags.Add("-O2")
-$ClangFlags.Add("-Wall")
-$ClangFlags.Add("-Wextra")
-$ClangFlags.Add("-I")
-$ClangFlags.Add((Join-Path $NdkRoot "sysroot\usr\include\aarch64-linux-android"))
-$ClangFlags.Add("-I")
-$ClangFlags.Add((Join-Path $NdkRoot "sysroot\usr\include"))
-$ClangFlags.Add("--sysroot")
-$ClangFlags.Add((Join-Path $NdkRoot "sysroot"))
+$ClangFlags = @(
+    "-target", "aarch64-linux-android$MinApi",
+    "-DANDROID", "-D__ANDROID_API__=$MinApi",
+    "-fPIC", "-O2", "-Wall", "-Wextra",
+    "-I", (Join-Path $NdkRoot "sysroot\usr\include\aarch64-linux-android"),
+    "-I", (Join-Path $NdkRoot "sysroot\usr\include"),
+    "--sysroot", (Join-Path $NdkRoot "sysroot")
+)
 
-$CppObjFiles = New-Object System.Collections.ArrayList
+$CppObjFiles = @()
 foreach ($src in $CppSources) {
     $srcPath = Join-Path $NativeRoot $src
     if (-not (Test-Path $srcPath)) {
@@ -162,18 +155,16 @@ foreach ($src in $CppSources) {
     }
     $baseName = [System.IO.Path]::GetFileNameWithoutExtension($src)
     $objFile = Join-Path $ObjDir ($baseName + ".o")
-    $CppObjFiles.Add($objFile)
+    $CppObjFiles += $objFile
 
-    $CmdArgs = New-Object System.Collections.ArrayList
-    $CmdArgs.Add($Clang)
-    foreach ($f in $ClangFlags) { $CmdArgs.Add($f) }
-    $CmdArgs.Add("-c")
-    $CmdArgs.Add($srcPath)
-    $CmdArgs.Add("-o")
-    $CmdArgs.Add($objFile)
+    $CmdArgs = @(
+        $Clang
+    ) + $ClangFlags + @(
+        "-c", $srcPath, "-o", $objFile
+    )
 
     if ($Verbose) { Write-Host "  clang++ $src -> $objFile" }
-    $CmdOutput = & $CmdArgs.ToArray() 2>&1
+    $CmdOutput = & $CmdArgs 2>&1
     Write-Host $CmdOutput
     if ($LASTEXITCODE -ne 0) { throw "clang++ failed for $src" }
 }
@@ -185,28 +176,22 @@ Write-Host "`n[3/4] Linking libWayDirect_engine.so ..."
 # Remove old output
 if (Test-Path $LibOut) { Remove-Item -Path $LibOut -Force }
 
-$AllObjs = New-Object System.Collections.ArrayList
-foreach ($o in $OdinObjFiles) { $AllObjs.Add($o.FullName) }
-foreach ($o in $CppObjFiles) { $AllObjs.Add($o) }
+$AllObjs = @()
+foreach ($o in $OdinObjFiles) { $AllObjs += $o.FullName }
+foreach ($o in $CppObjFiles) { $AllObjs += $o }
 
-$LinkArgs = New-Object System.Collections.ArrayList
-$LinkArgs.Add($Clang)
-$LinkArgs.Add("-shared")
-$LinkArgs.Add("-target")
-$LinkArgs.Add("aarch64-linux-android$MinApi")
-$LinkArgs.Add("--sysroot")
-$LinkArgs.Add((Join-Path $NdkRoot "sysroot"))
-$LinkArgs.Add("-o")
-$LinkArgs.Add($LibOut)
-foreach ($o in $AllObjs) { $LinkArgs.Add($o) }
-# Link Android system libs
-$LinkArgs.Add("-llog")
-$LinkArgs.Add("-landroid")
-$LinkArgs.Add("-lEGL")
-$LinkArgs.Add("-lGLESv2")
+$LinkArgs = @(
+    $Clang,
+    "-shared",
+    "-target", "aarch64-linux-android$MinApi",
+    "--sysroot", (Join-Path $NdkRoot "sysroot"),
+    "-o", $LibOut
+) + $AllObjs + @(
+    "-llog", "-landroid", "-lEGL", "-lGLESv2"
+)
 
 if ($Verbose) { Write-Host "  Linking $($AllObjs.Count) objects into $LibOut" }
-$LinkOutput = & $LinkArgs.ToArray() 2>&1
+$LinkOutput = & $LinkArgs 2>&1
 Write-Host $LinkOutput
 if ($LASTEXITCODE -ne 0) { throw "Link failed" }
 
