@@ -26,13 +26,16 @@ import "core:strings"
 // ---------------------------------------------------------------------------
 // C FFI — Android log bridge
 // ---------------------------------------------------------------------------
+// __android_log_print is declared in core:sys/android/log.odin (liblog).
+// We redeclare it here under liblog so core_heart can call it directly
+// without depending on waydirect_jni's import chain.
 
-foreign import libc "system:c"
+foreign import liblog "system:log"
 
 @(default_calling_convention = "c")
-foreign libc {
+foreign liblog {
 	// Android NDK: <android/log.h>. Priority values match android/log.h.
-	__android_log_print :: proc(prio: c.int, tag: cstring, fmt: cstring, msg: cstring) -> c.int ---
+	__android_log_print :: proc(prio: c.int, tag: cstring, fmt: cstring, #c_vararg args: ..any) -> c.int ---
 }
 
 // LogLevel mirrors the C++ priority mapping.

@@ -1,109 +1,126 @@
-# Native modular layout (agent guide) â€” updated Oct 2025 for Odin
+# Native modular layout (agent guide) — Odin bindings purge, Android 10 target
 
-Branch: `arena/e58556e6-WayDirect` (off `main`) Â· Odin `dev-2025-10` Â· target Android 10 (API 29).
+Branch: `experiment/use_official_odin_android_bindings` (off `main`) · Odin `dev-2026-11` · target Android 10 (API 29).
 
-This tree now has **two languages**: C/C++ (C++23 + C11) and **Odin** (`*.odin`). Odin is the primary new code; C++ remains linking for the transition. See `docs/NATIVE_OVERVIEW.md` for the full October 2025 sweep (syntax fixes, bionic wrappers).
+This tree has **two languages**: C/C++ (C++23 + C11) and **Odin** (`*.odin`). Odin is the primary language; C/C++ remains only as FFI implementation behind Odin's `foreign import "system:c"` declarations.
 
-This tree keeps everything under **`native/`** (not repo-root `backend/`).
-Modules are independent sibling roots with their own `CMakeLists.txt` and public headers.
+This tree keeps everything under **`native/`**.
 
 ## Target layout
 
 ```text
 native/
-â”œâ”€â”€ CMakeLists.txt              # orchestrates C++ modules â†’ Odin archive â†’ libWayDirect_engine.so
-â”œâ”€â”€ MODULES.md                  # this file
-â”œâ”€â”€ cmake/CompilerFlags.cmake
-â”œâ”€â”€ odin/
-â”‚   â”œâ”€â”€ build_odin.cmake        # packs Odin .o â†’ libWayDirect_core_odin.a via llvm-ar
-â”‚   â””â”€â”€ WayDirect_core.odin         # action router + C ABI exports (only package CMake builds)
-â”œâ”€â”€ core/                       # WayDirect_core â€” foundation only (Odin + C)
-â”‚   â”œâ”€â”€ include/WayDirect/core/     # android_fs.h (bionic allowlist), json_util.hpp, paths.hpp, logging.hpp
-â”‚   â”œâ”€â”€ src/
-â”‚   â”‚   â”œâ”€â”€ *.odin              # core_heart package: json_util, paths, logging, text (+ header comments)
-â”‚   â”‚   â”œâ”€â”€ *.cpp/.c            # C++ impl + android_fs.c (bionic-safe FS)
-â”‚   â”‚   â””â”€â”€ android_fs.c
-â”‚   â””â”€â”€ CMakeLists.txt
-â”œâ”€â”€ storage/                    # WayDirect_storage â€” largest (Odin + C)
-â”‚   â”œâ”€â”€ include/WayDirect/storage/
-â”‚   â”œâ”€â”€ src/
-â”‚   â”‚   â”œâ”€â”€ *.odin              # storage package: fs_android (central C bridge), analyser, walker, cache, search, cleaner, organizer, index, stats_db/json
-â”‚   â”‚   â”œâ”€â”€ *.c/.cpp            # index_c.c (file-backed index), dir_walk_android.c, collect_data.c, etc.
-â”‚   â”‚   â””â”€â”€ index_c.c
-â”‚   â””â”€â”€ modules/search|cleaner|organizer
-â”œâ”€â”€ documents/                  # WayDirect_documents (Odin + C helpers)
-â”œâ”€â”€ transfer/                   # WayDirect_transfer (Odin + transfer_shim.c)
-â”œâ”€â”€ media/                      # WayDirect_media (Odin stub, future thumbs)
-â”œâ”€â”€ preview/                    # WayDirect_preview (Odin capped text preview)
-â”œâ”€â”€ jni/                        # SHARED lib boundary only â€” WayDirect_engine.c (thin JNI router, no logic)
-â”œâ”€â”€ shim/                       # odin_bionic_shim.h (contract) + WayDirect_shim.cpp (legacy C++ exports, being replaced by Odin)
-â”œâ”€â”€ third_party/                # nlohmann/json + SQLite (gitignored)
-â””â”€â”€ odin/                       # Odin package root (see native/odin/WayDirect_core.odin doc)
+├── build-android.ps1      # Odin-based build script (replaces CMake)
+├── MODULES.md             # this file
+├── odin/
+│   └── WayDirect_core.odin   # action router + C ABI exports (only Odin package built directly)
+├── core/                  # WayDirect_core — foundation only (Odin + C FFI)
+│   ├── include/WayDirect/core/
+│   │   └── android_fs.h   # bionic allowlist header
+│   ├── src/
+│   │   ├── *.odin          # core_heart package (json_util, paths, logging, text)
+│   │   └── *.cpp/.c        # C++ FFI implementations
+│   └── (CMakeLists.txt deleted — see build-android.ps1)
+├── storage/               # WayDirect_storage — largest (Odin + C FFI)
+│   ├── include/WayDirect/storage/
+│   ├── src/
+│   │   ├── *.odin          # storage package
+│   │   └── *.c/.cpp        # C FFI implementations (index_c.c, dir_walk_android.c, ...)
+│   └── modules/search|cleaner|organizer
+├── documents/             # WayDirect_documents (Odin + C helpers)
+├── transfer/              # WayDirect_transfer (Odin + transfer_shim.c)
+├── media/                 # WayDirect_media (Odin stub)
+├── preview/               # WayDirect_preview (Odin capped text preview)
+├── jni/                   # JNI boundary — Odin only (waydirect_jni.odin, replaces waydirect_engine.c)
+│   └── waydirect_jni.odin  # JNI_OnLoad + Java_com_waydirect_bridge_NativeEngine_* exports
+├── third_party/           # nlohmann/json + SQLite (gitignored, local only)
 ```
 
-## Dependency graph (must stay acyclic) â€” Oct 2025 adds Odin packages mirroring C++
+## Dependency graph (must stay acyclic)
 
 ```text
 core  (core_heart in Odin)
-  â†‘
-storage (storage in Odin)  â†â”€â”€ documents (documents)
-  â†‘                        â†â”€â”€ transfer  (transfer)
-  â†‘                        â†â”€â”€ media     (media, leaf)
-  â†‘
-preview (preview â€” core + storage read-only, not storage write)
-jni links: WayDirect_core_odin (static archive from Odin) + all C++ modules + C wrappers
+  ↑
+storage (storage in Odin) ──→ documents (documents)
+  ↑                            ──→ transfer  (transfer)
+  ↑                            ──→ media     (media, leaf)
+  ↑
+preview (preview — core + storage read-only, not storage write)
+jni: waydirect_jni imports waydirect_core; exports JNI_OnLoad + Java_com_waydirect_bridge_NativeEngine_*
 ```
 
-Odin packages are siblings of their C++ twins (`native/<module>/src/*.odin` imports `../../core/src` relatively). The JNI `.so` links the Odin archive + the C/C++ modules (see `native/CMakeLists.txt` Odin section).
+Odin packages are siblings of their C++ FFI twins (`native/<module>/src/*.odin` imports `../../core/src` relatively). The shared library links the Odin object files + the C/C++ FFI object files (see `native/build-android.ps1`).
 
-Rules:
+## Build system — replaced CMake with Odin + NDK clang
 
-1. No `JNIEnv` outside `jni/`.
-2. Domain modules depend only downward (`PUBLIC`/`PRIVATE` link as documented per module).
-3. Large results â†’ files under app cache (see `core` AppPaths); JNI returns paths + metadata.
-4. Do not rename `native/` to `backend/` unless Gradle `externalNativeBuild` is updated in the same change.
+**No CMake. No `externalNativeBuild` in Gradle.**
 
-## Style for this tree â€” C++ + Odin (keep it beginner-readable)
+Build the native shared library:
 
-### C++
+```pwsh
+pwsh native/build-android.ps1
+```
+
+This:
+1. Runs `odin build native/jni -build-mode:obj -target:linux_arm64 -subtarget:android -reloc-mode:pic -no-entry-point`
+   - Builds `waydirect_jni` package which transitively imports `waydirect_core` + all modules
+   - Produces object files with JNI exports + core exports
+2. Compiles remaining C/C++ FFI sources with NDK `clang++`
+3. Links everything into `native/build/arm64-v8a/libWayDirect_engine.so`
+
+Then Gradle packages it:
+
+```bash
+./gradlew assembleDebug
+```
+
+Gradle's `build.gradle` has been stripped of `externalNativeBuild`/`CMake`. It only compiles Java + resources and copies the pre-built `.so` into `jniLibs`.
+
+## Rules
+
+1. No `JNIEnv` outside `jni/` — JNI is handled entirely by `waydirect_jni.odin` using official bindings (`core:sys/android/jni.odin`, `vendor:android/java/java.odin`).
+2. Domain modules depend only downward (core → storage → documents/transfer/media/preview).
+3. Large results → files under app cache; JNI returns `{status, path}`.
+4. All Odin file I/O goes through C wrappers (`android_fs.c`, `dir_walk_android.c`) — never `core:os` on Android (seccomp blocks `statx`/`openat2` on API 29).
+
+## Style for this tree — C++ + Odin
+
+### C++ (FFI only)
 - Plain structs + free functions; no `class`, no inheritance, no virtuals.
-- Headers declare, `.cpp` files define â€” no `inline` functions or globals in headers.
-- Plain `for`/`while`/`if` over clever algorithms; one shared helper beats five local lambdas (see `core::ascii_lower`).
-- Name every conversion: `static_cast` for narrowing is honest and required; `reinterpret_cast` only where OS API forces it (sockets).
-- No macros for logging â€” use `WayDirect::core::log`. No `using namespace`.
-- `std::string_view` at API edges, `std::filesystem`, `std::error_code` (never exceptions) â€” modern STL/RAII, nothing exotic.
+- Headers declare, `.cpp` files define.
+- `std::string_view` at API edges, `std::filesystem`, `std::error_code` (never exceptions).
 
-### Odin (Oct 2025)
-- `package` per module, one `.odin` per concern (mirrors C++ split); header comment block in every file documents purpose + bionic contract.
-- No `core:os` for filesystem â€” use `fs_android.odin` C wrappers (`stat_c`, `walk_files_c`, etc.). See `native/shim/odin_bionic_shim.h` allowlist.
-- `ODIN_OS == .Android` enum, `foreign import "system:c"` + `@(default_calling_convention="c")`, explicit `context.temp_allocator` + `defer free_all` per JNI call.
-- File-backed replies: JSON spilled to `cache/` file, JNI returns `{status, path}`; Java reads via `PathCache`.
-- `when ODIN_OS == .Android` for log vs host branches; no `using` statement; `make(map[...])` not `{}` literals.
+### Odin
+- `package` per module, one `.odin` per concern.
+- No `core:os` for filesystem — use C wrappers (`stat_c`, `walk_files_c`, etc.).
+- `foreign import "system:c"` + `@(default_calling_convention="c")` for libc calls.
+- `context.temp_allocator` + `defer free_all` per exported proc.
+- File-backed replies: JSON spilled to `cache/` file, JNI returns `{status, path}`.
 
-## Build status â€” Oct 2025 sweep complete
+## What was removed (purge)
 
-- Modular CMake targets own their sources (`include/` + `src/`); JNI resolves via `<WayDirect/...>`.
-- Legacy flat sources removed; storage submodules (`search`, `cleaner`, `organizer`) are `STATIC` libs.
-- File-backed index: `BUILD_INDEX` / `INDEX_META` / `SEARCH_INDEX` / `GROUP_INDEX_BY_DAY` (`index_c.c` + Odin bridge in `storage/index.odin`); Java passes app files dir once.
-- **Odin sweep**: all `native/**/*.odin` corrected for `dev-2025-10` syntax (see `docs/NATIVE_OVERVIEW.md` Â§2-3); `WayDirect_core.odin` is the only package CMake builds, re-exports `WayDirect_*` C ABI (replacing `shim/WayDirect_shim.cpp` progressively); `android_fs.c` is the bionic abstraction for every Odin file op.
-- `WayDirect_preview` capped text preview (action 19); Internals destination browses private home.
-- `WayDirect_media` stub anchored so `WayDirect_media` target is never empty.
-
-## Ordered migration â€” updated for Odin (agents)
-
-1. Read this file + `core/MIGRATION.md` + `docs/NATIVE_OVERVIEW.md`.
-2. **core** â€” `json_util`, `paths`, `logging`, `text` ported to Odin (`core_heart` package) with C wrappers. â€” done Oct 2025
-3. **storage** â€” `walk`, `list`, `stats`, `cache`, `search`, `cleaner`, `organizer`, `index` ported (see Â§2-3). â€” done Oct 2025
-4. **documents** and **transfer** â€” walk/filter + socket stub ported. â€” done Oct 2025
-5. Move `WayDirect_engine.cpp` â†’ `jni/` â€” done; `WayDirect_engine.c` is now a thin C router to `WayDirect_route_action` in Odin.
-6. Legacy paths deleted; `#include <WayDirect/...>` works via module targets (no parent-dir hacks). â€” done
-7. Java passes `filesDir` once (`ACTION_INIT_APP_PATHS`); index is file-backed (`BUILD_INDEX` â†’ `SEARCH_INDEX` â†’ file). â€” done
-8. **Odin October 2025 sweep** â€” all `*.odin` corrected for `dev-2025-10` + Android 10 bionic allowlist (see `docs/NATIVE_OVERVIEW.md` Â§2). â€” done this branch
-
-Remaining open items: media metadata extraction (ExoPlayer on Java side; native thumb paths under `cache/`), transfer full transport behind the facade, nlohmann/json for deeply nested payloads (flags.md).
+| Removed | Replaced by |
+|---------|-------------|
+| `native/CMakeLists.txt` | `native/build-android.ps1` + `odin build` |
+| `native/*/CMakeLists.txt` | `native/build-android.ps1` |
+| `native/cmake/CompilerFlags.cmake` | clang flags in `build-android.ps1` |
+| `native/odin/build_odin.cmake` | `odin build -build-mode:obj` directly |
+| `native/jni/waydirect_engine.c` | `native/jni/waydirect_jni.odin` (Odin JNI using official bindings) |
+| `native/shim/` (WayDirect_shim.cpp, odin_bionic_shim.h) | Odin `@(export) proc "c"` in `waydirect_core.odin` / `waydirect_jni.odin` |
+| `native/build-test/` | deleted (stale prebuilt artifacts) |
+| `native/ERROR_ANALYSIS.md` | deleted (superseded) |
+| `native/FUTURE_JNI_AND_CPP23.md` | deleted (superseded) |
+| Gradle `externalNativeBuild` / `ndkVersion` / `copyCompileCommands` | stripped from `app/build.gradle` |
 
 ## Gradle
 
-`app` already points `externalNativeBuild.cmake.path` at `native/CMakeLists.txt`.
-No path change required as long as the final artifact remains `libWayDirect_engine.so`.
+`app/build.gradle` compiles Java + resources only. No `externalNativeBuild`. The `.so` is built separately by `build-android.ps1` and copied into `app/src/main/jniLibs/arm64-v8a/` before `assembleDebug`.
 
+## Ordered migration
+
+1. Read this file + `docs/NATIVE_OVERVIEW.md` + `docs/BRIDGE_PLAN.md`.
+2. All `*.odin` files use `dev-2026-11` syntax (verified with `odin check`).
+3. JNI layer is pure Odin (`waydirect_jni.odin`).
+4. C++ FFI files remain until ported to pure Odin; they are compiled by `build-android.ps1` with NDK clang.
+
+Remaining open items: port remaining C++ FFI to pure Odin, media metadata extraction, nlohmann/json for deeply nested payloads.

@@ -10,6 +10,7 @@ build/
 
 # App-specific build outputs
 app/build/
+app/src/main/jniLibs/
 
 collect_context.py
 context.txt
@@ -28,6 +29,9 @@ native/third_party/*
 keystore.properties
 *.jks
 *.keystore
+
+# Local build configuration (gitignored, per-machine)
+native/build-android.cfg
 
 build/
 

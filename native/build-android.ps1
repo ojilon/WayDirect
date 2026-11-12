@@ -1,0 +1,291 @@
+# =============================================================================
+# native/build-android.ps1 — Odin-based Android native build (replaces CMake)
+#
+# Builds libWayDirect_engine.so for Android arm64-v8a using:
+#   * odin build          — for all *.odin sources (Odin packages + C ABI exports)
+#   * NDK clang (clang++) — for remaining C/C++ FFI implementation files
+#
+# Usage (from repo root):
+#   powershell -File native/build-android.ps1
+#
+# Configuration is read from native/build-android.cfg (gitignored, local only).
+# Fallback order: cfg file → environment variable → hardcoded default.
+#
+# Output:
+#   native/build/arm64-v8a/libwaydirect_engine.so
+#
+# =============================================================================
+
+param(
+    [string]$Abi = "arm64-v8a",
+    [int]$MinApi = 29,
+    [string]$BuildDir = "native/build"
+)
+
+$ErrorActionPreference = "Stop"
+
+# --------------------------------------------------
+# 0. Read local config file (gitignored)
+# --------------------------------------------------
+
+function Get-CfgValue {
+    param([string]$Key, [string]$Default = $null)
+    $CfgFile = Join-Path $PSScriptRoot "build-android.cfg"
+    if (Test-Path $CfgFile) {
+        $Content = Get-Content $CfgFile
+        foreach ($Line in $Content) {
+            $Trimmed = $Line.Trim()
+            if ($Trimmed -eq "" -or $Trimmed.StartsWith("#")) { continue }
+            if ($Trimmed -match "^([^=]+)=(.*)$") {
+                $Name = $Matches[1].Trim()
+                $Value = $Matches[2].Trim()
+                if ($Name -eq $Key) {
+                    return $Value
+                }
+            }
+        }
+    }
+    return $Default
+}
+
+# Resolve paths (cfg → env → hardcoded default)
+$CfgOdinDir = Get-CfgValue -Key "odin_dir"
+$CfgNdkDir  = Get-CfgValue -Key "ndk_dir"
+$CfgSdkDir  = Get-CfgValue -Key "sdk_dir"
+$CfgAbi     = Get-CfgValue -Key "abi"
+$CfgMinApi  = Get-CfgValue -Key "min_api"
+
+# Override params with cfg values if provided on command line was not explicitly set
+# (PowerShell params already have defaults; cfg fills gaps only)
+if ($PSBoundParameters.ContainsKey("Abi") -eq $false -and $CfgAbi) {
+    $Abi = $CfgAbi
+}
+if ($PSBoundParameters.ContainsKey("MinApi") -eq $false -and $CfgMinApi) {
+    $MinApi = [int]$CfgMinApi
+}
+
+# --------------------------------------------------
+# 1. Tools
+# --------------------------------------------------
+
+$OdinCmd = Get-Command odin -ErrorAction SilentlyContinue
+if (-not $OdinCmd) {
+    throw "Odin compiler not found. Add odin to PATH."
+}
+$OdinDir = Split-Path $OdinCmd.Source -Parent
+if (-not (Test-Path $OdinDir)) {
+    throw "Odin directory not found: $OdinDir"
+}
+
+$Ndk = $CfgNdkDir
+if (-not $Ndk) {
+    $Ndk = $env:ODIN_ANDROID_NDK
+}
+if (-not $Ndk) {
+    $Ndk = "D:\Dev\AndroidCLI\sdk\ndk\30.0.16248370"
+}
+
+if (-not (Test-Path $Ndk)) {
+    throw "Android NDK not found: $Ndk. Set ndk_dir in native/build-android.cfg or ODIN_ANDROID_NDK env var."
+}
+
+$Sdk = $CfgSdkDir
+if (-not $Sdk) {
+    $Sdk = $env:ODIN_ANDROID_SDK
+}
+if (-not $Sdk) {
+    $Sdk = "D:\Dev\AndroidCLI\sdk"
+}
+
+$Toolchain = Join-Path $Ndk "toolchains\llvm\prebuilt\windows-x86_64\bin"
+
+$Clang = Join-Path $Toolchain "clang.exe"
+$ClangPP = Join-Path $Toolchain "clang++.exe"
+
+foreach ($Tool in @($Clang, $ClangPP)) {
+    if (-not (Test-Path $Tool)) {
+        throw "Missing NDK compiler: $Tool"
+    }
+}
+
+# --------------------------------------------------
+# 2. Directories
+# --------------------------------------------------
+
+$Root = (Get-Location).Path
+$Native = Join-Path $Root "native"
+
+$ObjDir = Join-Path $BuildDir "obj"
+$OutDir = Join-Path $BuildDir $Abi
+
+New-Item -ItemType Directory -Force -Path $ObjDir, $OutDir | Out-Null
+
+$ObjDir = (Resolve-Path $ObjDir).Path
+$OutDir = (Resolve-Path $OutDir).Path
+
+$Output = Join-Path $OutDir "libwaydirect_engine.so"
+
+# Clean previous objects
+Remove-Item "$ObjDir/*.o" -Force -ErrorAction SilentlyContinue
+
+# --------------------------------------------------
+# 3. Odin compilation
+# --------------------------------------------------
+
+Write-Host "`n[1/3] Building Odin..."
+
+# odin.exe must run from its own directory (LLVM loads relative resources).
+Push-Location $OdinDir
+try {
+    $OdinArgs = @(
+        "build",
+        "$Native/jni",
+        "-build-mode:obj",
+        "-target:linux_arm64",
+        "-subtarget:android",
+        "-reloc-mode:pic",
+        "-no-entry-point",
+        "-out:$ObjDir/waydirect_engine"
+    )
+    $OdinCmdLine = $OdinArgs -join ' '
+    Write-Host "  odin $OdinCmdLine"
+    cmd /c "odin $OdinCmdLine" 2>&1
+}
+finally {
+    Pop-Location
+}
+
+if ($LASTEXITCODE -ne 0) {
+    throw "Odin compilation failed."
+}
+
+$OdinObjects = @(
+    Get-ChildItem $ObjDir -Filter "waydirect_engine*.o" -File
+)
+
+if ($OdinObjects.Count -eq 0) {
+    throw "Odin produced no object files."
+}
+
+# --------------------------------------------------
+# 4. Legacy C/C++ compilation
+# --------------------------------------------------
+
+Write-Host "`n[2/3] Building legacy C/C++..."
+
+$Sources = @(
+    "storage/src/dir_walk_android.c"
+    "storage/src/index_c.c"
+    "storage/modules/search/src/collect_data.c"
+    "storage/src/storage_placeholder.cpp"
+    "documents/src/documents_placeholder.cpp"
+    "documents/src/check_if_directory.c"
+    "documents/src/doc_filter_helper.c"
+    "transfer/src/transfer_placeholder.cpp"
+    "transfer/src/transfer_shim.c"
+    "media/src/media_placeholder.cpp"
+    "file_system_bridge/src/android_fs.c"
+)
+
+$Sysroot = Join-Path $Ndk "toolchains\llvm\prebuilt\windows-x86_64\sysroot"
+
+# Include paths for remaining native headers (after .cpp/.hpp purge)
+$IncPaths = @(
+    "-I$Native/core/include"
+    "-I$Native/storage/include"
+    "-I$Native/documents/include"
+    "-I$Native/transfer/include"
+    "-I$Native/file_system_bridge/include"
+)
+
+$Flags = @(
+    "-target", "aarch64-linux-android$MinApi"
+    "--sysroot=$Sysroot"
+    "-DANDROID"
+    "-fPIC"
+    "-O2"
+    "-Wall"
+    "-Wextra"
+    "-I$Sysroot/usr/include"
+    "-I$Sysroot/usr/include/aarch64-linux-android"
+) + $IncPaths
+
+$CppObjects = @()
+
+foreach ($Source in $Sources) {
+
+    $Input = Join-Path $Native $Source
+
+    if (-not (Test-Path $Input)) {
+        Write-Warning "Skipping missing source: $Source"
+        continue
+    }
+
+    # Preserve directory structure to avoid basename collisions.
+    $RelativePath = [IO.Path]::ChangeExtension($Source, ".o")
+    $Object = Join-Path $ObjDir $RelativePath
+    $ObjectDir = Split-Path $Object -Parent
+
+    New-Item -ItemType Directory -Force -Path $ObjectDir | Out-Null
+
+    $Compiler = if ($Source.EndsWith(".c")) {
+        $Clang
+    } else {
+        $ClangPP
+    }
+
+    Write-Host "  $Source"
+
+    & $Compiler @Flags -c $Input -o $Object
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Compilation failed: $Source"
+    }
+
+    $CppObjects += $Object
+}
+
+# --------------------------------------------------
+# 5. Link shared library
+# --------------------------------------------------
+
+Write-Host "`n[3/3] Linking shared library..."
+
+$Objects = @($OdinObjects.FullName) + $CppObjects
+
+& $ClangPP `
+    -shared `
+    -target "aarch64-linux-android$MinApi" `
+    "--sysroot=$Sysroot" `
+    -o $Output `
+    $Objects `
+    -static-libstdc++ `
+    -llog `
+    -landroid `
+    -lEGL `
+    -lGLESv2
+
+if ($LASTEXITCODE -ne 0) {
+    throw "Shared library linking failed."
+}
+
+# --------------------------------------------------
+# 6. Copy .so to Gradle jniLibs (for APK packaging)
+# --------------------------------------------------
+
+$JniLibsDir = Join-Path (Resolve-Path "app/src/main") "jniLibs/$Abi"
+if (-not (Test-Path $JniLibsDir)) {
+    New-Item -ItemType Directory -Force -Path $JniLibsDir | Out-Null
+}
+# Remove any stale variants (e.g. old libWayDirect_engine.so casing)
+Get-ChildItem -Path $JniLibsDir -Filter "lib*engine.so" -ErrorAction SilentlyContinue | Remove-Item -Force
+$DestSo = Join-Path $JniLibsDir "libwaydirect_engine.so"
+Copy-Item -Path $Output -Destination $DestSo -Force
+Write-Host "Copied .so to: $DestSo"
+
+Write-Host "`n=================================="
+Write-Host "Build successful"
+Write-Host "ABI:    $Abi"
+Write-Host "Output: $Output"
+Write-Host "Copied to: $DestSo"
+Write-Host "=================================="
