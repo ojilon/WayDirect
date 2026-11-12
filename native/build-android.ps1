@@ -3,7 +3,7 @@
 #
 # Builds libWayDirect_engine.so for Android arm64-v8a using:
 #   * odin build          — for all *.odin sources (Odin packages + C ABI exports)
-#   * NDK clang (clang++) — for remaining C/C++ FFI implementation files
+#   * NDK clang (clang++) — for remaining C FFI implementation files (no more .cpp)
 #
 # Usage (from repo root):
 #   powershell -File native/build-android.ps1
@@ -168,28 +168,24 @@ if ($OdinObjects.Count -eq 0) {
 }
 
 # --------------------------------------------------
-# 4. Legacy C/C++ compilation
+# 4. Legacy C FFI compilation (no more .cpp placeholders)
 # --------------------------------------------------
 
-Write-Host "`n[2/3] Building legacy C/C++..."
+Write-Host "`n[2/3] Building remaining C FFI..."
 
 $Sources = @(
     "storage/src/dir_walk_android.c"
     "storage/src/index_c.c"
     "storage/modules/search/src/collect_data.c"
-    "storage/src/storage_placeholder.cpp"
-    "documents/src/documents_placeholder.cpp"
     "documents/src/check_if_directory.c"
     "documents/src/doc_filter_helper.c"
-    "transfer/src/transfer_placeholder.cpp"
     "transfer/src/transfer_shim.c"
-    "media/src/media_placeholder.cpp"
     "file_system_bridge/src/android_fs.c"
 )
 
 $Sysroot = Join-Path $Ndk "toolchains\llvm\prebuilt\windows-x86_64\sysroot"
 
-# Include paths for remaining native headers (after .cpp/.hpp purge)
+# Include paths for remaining native headers
 $IncPaths = @(
     "-I$Native/core/include"
     "-I$Native/storage/include"

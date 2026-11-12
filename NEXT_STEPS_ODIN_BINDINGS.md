@@ -3,40 +3,49 @@
 **Branch:** `experiment/use_official_odin_android_bindings`  
 **Status:** Native build works AND app tested successfully on device via adb  
 **Done:** App builds, installs, launches, and Odin JNI layer works end-to-end  
-**Next:** Port remaining C++ FFI → pure Odin, add `odin bundle android` packaging
+**Next:** Remaining C FFI is intentional (bionic-safe walk/index); pure-Odin media metadata later; `odin bundle android` packaging notes
 
 ---
 
-## 1. Port remaining C++ FFI `.cpp` files to pure Odin
+## 1. Remaining C++ FFI → pure Odin (completed for placeholders)
 
-These files have no Odin mirror yet and are compiled by NDK `clang++` as legacy FFI:
+The last `.cpp` placeholders (module anchors that existed only so the old CMake modules had a translation unit) have been removed from `native/build-android.ps1` `$Sources` and deleted:
 
-| File | Status | Odin target |
-|------|--------|-------------|
-| `transfer/src/transfer_placeholder.cpp` | stub | `transfer.odin` |
-| `transfer/src/transfer_shim.c` | C shim | `transfer.odin` + `index_c.c` |
-| `documents/src/documents_placeholder.cpp` | stub | `documents.odin` |
-| `media/src/media_placeholder.cpp` | stub | `media.odin` |
-| `storage/src/storage_placeholder.cpp` | stub | `storage.odin` |
+| Former file | Status |
+|-------------|--------|
+| `transfer/src/transfer_placeholder.cpp` | deleted (logic already in Odin + `transfer_shim.c`) |
+| `documents/src/documents_placeholder.cpp` | deleted (logic in `documents.odin` + C helpers) |
+| `media/src/media_placeholder.cpp` | deleted (stub in `media.odin`) |
+| `storage/src/storage_placeholder.cpp` | deleted (logic in storage `*.odin`) |
 
-**Procedure per file:**
+**What remains (intentionally C, not C++):**
 
-1. Create `foo.odin` in the module's `src/` directory with the module's package name.
-2. Move the FFI declarations from `foreign import "system:c"` blocks in `waydirect_core.odin` (or create new ones) into the `.odin` file.
-3. Implement the logic in Odin, using C wrappers (`stat_c`, `walk_files_c`, etc.) for file I/O — never `core:os` on Android (seccomp blocks `statx`/`openat2` on API 29).
-4. Delete the `.cpp`/`.c` file and its `.hpp` if it has no other consumers.
-5. Remove the entry from `native/build-android.ps1` `$Sources`.
-6. Run `pwsh native/build-android.ps1` to verify the build still succeeds.
+- `storage/src/dir_walk_android.c`, `index_c.c`
+- `storage/modules/search/src/collect_data.c`
+- `documents/src/check_if_directory.c`, `doc_filter_helper.c`
+- `transfer/src/transfer_shim.c`
+- `file_system_bridge/src/android_fs.c`
+
+These are thin, bionic-safe wrappers (opendir/readdir/stat/open/read — no `statx`/`openat2`) that Odin calls via `foreign`. They are not candidates for a pure-Odin rewrite until Odin gains a stable, seccomp-friendly Android FS path or we accept a higher minSdk.
+
+Dead C++ left under `storage/modules/*/src/*.cpp` (duplicate_finder, large_files, file_organizer, file_search) is **not** compiled by the current build script; the live implementations are the corresponding `*.odin` files. They can be deleted in a follow-up cleanup commit once you are sure no local scripts reference them.
+
+**Procedure that was used:**
+
+1. Confirm each module already had a working `.odin` implementation (cleaner, organizer, search, documents, media, transfer).
+2. Remove the placeholder `.cpp` entries from `$Sources` in `build-android.ps1`.
+3. Delete the placeholder files.
+4. Re-run `pwsh native/build-android.ps1` (on the Windows host with Odin + NDK) to verify.
 
 ---
 
-## 2. `odin bundle android` — APK packaging without Gradle
+## 2. `odin bundle android` — APK packaging without Gradle (notes on Java / XML / Material 3)
 
-Odin's compiler has a built-in `bundle android` command that assembles a signed `.apk` (or `.aab`) from a directory layout. This can replace Gradle's `externalNativeBuild`/CMake packaging for the native portion, though Gradle is still needed for the Java/XML UI.
+Odin's compiler has a built-in `bundle android` command that assembles a signed `.apk` (or `.aab`) from a directory layout. This can replace Gradle's packaging for a **pure-Odin** app, but it does **not** replace Gradle for WayDirect today.
 
 ### What `odin bundle android` does
 
-From `D:\Dev\Odin\src\main.cpp` (usage text):
+From the Odin compiler usage text:
 
 ```
 odin bundle android <dir> makes an .apk, or an Android App Bundle with -out:<name>.aab, from:
@@ -58,18 +67,18 @@ app/
 ├── assets/                  ← optional assets
 └── lib/
     └── arm64-v8a/
-        └── libWayDirect_engine.so   ← built by build-android.ps1
+        └── libwaydirect_engine.so   ← built by build-android.ps1
 ```
 
 ### Required environment
 
-| Variable | Value on this PC | Purpose |
-|----------|-----------------|---------|
-| `ODIN_ANDROID_SDK` | `D:\Dev\AndroidCLI\sdk` | build-tools (aapt2), platforms (android.jar) |
-| `JAVA_HOME` | JDK 17 | javac for classes.dex, APK signing |
-| `ODIN_ANDROID_BUNDLETOOL` | path to bundletool `.jar` | only needed for `.aab` output |
+| Variable | Purpose |
+|----------|---------|
+| `ODIN_ANDROID_SDK` | build-tools (aapt2), platforms (android.jar) |
+| `JAVA_HOME` | javac for classes.dex, APK signing |
+| `ODIN_ANDROID_BUNDLETOOL` | only needed for `.aab` output |
 
-### Build command
+### Build command (example)
 
 ```powershell
 # 1. Build the native .so first
@@ -83,10 +92,10 @@ odin bundle android app -minimum-os-version:29 -out:WayDirect.apk
 
 ### What gets added automatically
 
-- `classes.dex` — contains `org.odin_lang.OdinActivity` (a `NativeActivity` subclass) and `org.odin_lang.NativeProxy` (JNI proxy for Odin→Java callbacks). Pre-built from `D:\Dev\Odin\vendor\android\java\_dex/` (`NativeProxy.java`, `OdinActivity.java`) and embedded in `vendor/android/java/classes.dex`.
+- `classes.dex` — contains `org.odin_lang.OdinActivity` (a `NativeActivity` subclass) and `org.odin_lang.NativeProxy` (JNI proxy for Odin→Java callbacks). Pre-built and embedded in the Odin distribution.
 - Signing — debug keystore by default (`~/.android/debug.keystore`).
 
-### Manifest requirements
+### Manifest requirements for pure-Odin path
 
 The `AndroidManifest.xml` must name `org.odin_lang.OdinActivity` (or a custom `NativeActivity` subclass) and set the native library name:
 
@@ -96,7 +105,7 @@ The `AndroidManifest.xml` must name `org.odin_lang.OdinActivity` (or a custom `N
         <activity
             android:name="org.odin_lang.OdinActivity"
             android:exported="true">
-            <meta-data android:name="android.app.lib_name" android:value="WayDirect_engine"/>
+            <meta-data android:name="android.app.lib_name" android:value="waydirect_engine"/>
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
@@ -106,11 +115,32 @@ The `AndroidManifest.xml` must name `org.odin_lang.OdinActivity` (or a custom `N
 </manifest>
 ```
 
-### Notes for WayDirect
+### Why this is *not* a drop-in for WayDirect today (Java / XML / Material 3)
 
-- WayDirect's UI is Material 3 Java/XML (Fragments, NavigationBarView, ViewBinding), so **Gradle is still required** for the Java/XML portion. `odin bundle android` produces a pure-Odin `NativeActivity` app — not suitable for WayDirect's current UI without a full rewrite.
-- The pragmatic path: keep Gradle for Java/XML + resources, use `build-android.ps1` for the `.so`, then `./gradlew assembleDebug` to package everything into one APK.
-- `odin bundle android` is useful for CI or for a future pure-Odin viewer/tool within the project.
+WayDirect's UI is **Material 3 Java + XML**:
+
+- Fragments (`HomeFragment`, `FilesFragment`, `StorageFragment`, `TransferFragment`, `CleanerFragment`, …)
+- NavigationBarView / bottom navigation
+- ViewBinding, Theme overlays, glass-blur chrome, custom views (`StorageRingView`, adapters, etc.)
+- Resource system: layouts, drawables, values, themes under `app/src/main/res/`
+- Java bridge layer (`NativeEngine`, `Bridge`, `PathRegistry`, `PathCache`, leases, capacity helpers)
+
+`odin bundle android` produces a **pure-Odin NativeActivity** app. It does **not**:
+
+1. Compile or package arbitrary Java sources (your `com.waydirect.*` package).
+2. Process your XML layouts / Material 3 themes / ViewBinding generated classes.
+3. Wire the existing `MainActivity` + Fragment navigation graph.
+4. Preserve the current JNI surface (`processAction` / action IDs) in the same form — the bundler injects `OdinActivity` + `NativeProxy` instead.
+
+Consequently:
+
+- **Gradle remains required** for the Java/XML/Material 3 portion. The pragmatic path stays: `build-android.ps1` → copy `.so` into `jniLibs` → `./gradlew assembleDebug`.
+- An Odin rewrite of *some* of the Java/XML surface is possible later, but it is a product decision, not a build-system switch:
+  - **What Odin can reasonably own today:** the entire native engine (already mostly done), file walk/index/search/organize/cleaner, network/transfer core, any future native-drawn preview or terminal.
+  - **What would have to be rewritten or abandoned for a pure `odin bundle` path:** every Fragment, every Adapter, ThemePrefs, UiChrome, Material components, the current bottom-nav IA, and the Java-side path/lease/cache helpers (or reimplemented via Odin ↔ Java proxies).
+  - **Hybrid middle ground (recommended):** keep Material 3 UI in Java/XML; continue thinning the Java bridge so that more logic lives in Odin; optionally use `vendor:android/java` + `proxy_new` for callbacks; use `odin bundle android` only for a secondary pure-Odin tool (e.g. a headless viewer or a kiosk-style native screen) if needed.
+
+In short: step 2 is valuable for CI of the native library or for a future pure-Odin binary, but it does **not** eliminate the Java/XML/Material 3 stack that defines WayDirect's current UX. Do not delete Gradle or the Java UI sources in pursuit of `odin bundle`.
 
 ---
 
@@ -118,7 +148,7 @@ The `AndroidManifest.xml` must name `org.odin_lang.OdinActivity` (or a custom `N
 
 **Prerequisites:**
 - Android phone plugged in via USB, USB debugging enabled
-- `adb` on PATH (from `D:\Dev\AndroidCLI\sdk\platform-tools\adb.exe`)
+- `adb` on PATH
 
 ### Commands
 
@@ -147,58 +177,38 @@ adb uninstall com.waydirect
 
 ### Expected behavior
 
-- App launches, shows Material 3 UI with bottom navigation (Home, Files, Storage, Transfer, Cleaner, Internals)
-- `NativeEngine.initEngine()` calls `JNI_OnLoad` in `waydirect_jni.odin`, which sets `android.jni_set_vm(vm)`
-- `NativeEngine.initAppPathsAsync()` calls `route_action(ACTION_INIT_APP_PATHS, filesDir)` → Odin `init_app_paths_internal` → writes `paths.json` manifest
-- Native file operations (list, search, stats, etc.) go through `route_action` → Odin modules → write result files under `files/WayDirect/cache/` → return `{status, path}`
+- App launches, shows Material 3 UI with bottom navigation
+- `NativeEngine.initEngine()` calls into Odin JNI (`JNI_OnLoad` / `android.jni_set_vm`)
+- `NativeEngine.initAppPathsAsync()` → Odin `init_app_paths_internal` → `paths.json`
+- Native file operations go through `route_action` → Odin modules → cache files → `{status, path}`
 
 ### Troubleshooting
 
 | Issue | Fix |
 |-------|-----|
-| `adb: device not found` | Enable USB debugging on phone; check `adb devices` |
+| `adb: device not found` | Enable USB debugging; check `adb devices` |
 | `INSTALL_FAILED_INVALID_APK` | Ensure `build-android.ps1` ran first so `.so` exists in `jniLibs` |
-| App crashes on native call | Check `adb logcat` for `WayDirectNative` / `WayDirectBridge` tags; verify Odin symbols match Java action IDs |
-| UnsatisfiedLinkError | Confirm `libWayDirect_engine.so` is in `app/src/main/jniLibs/arm64-v8a/` and matches device ABI |
+| App crashes on native call | Check `adb logcat` for tags; verify action IDs match |
+| UnsatisfiedLinkError | Confirm `libwaydirect_engine.so` is in `app/src/main/jniLibs/arm64-v8a/` |
 
 ---
 
-## Device Test Results (completed)
+## Device Test Results (completed earlier)
 
-**Device:** Transsion phone, arm64-v8a, USB debugging enabled  
-**APK:** `app/build/outputs/apk/debug/app-debug.apk`  
+**Device:** Transsion phone, arm64-v8a  
 **Package:** `com.waydirect.debug`  
 **Activity:** `com.waydirect.core.MainActivity`
 
-**Test commands:**
-```powershell
-pwsh native/build-android.ps1
-./gradlew :app:clean :app:assembleDebug
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb shell am start -n com.waydirect.debug/com.waydirect.core.MainActivity
-adb logcat -d -s WayDirectNative WayDirectBridge WayDirectEngine
-```
-
-**Verified log output:**
-```
-D WayDirectBridge: lease acquired: /data/user/0/com.waydirect.debug/files/WayDirect/waydirect/cache/index/files.json by index
-I WayDirectNative: initAppPaths: {"status":"paths_set","manifest":"...","all_ready":true,...}
-D WayDirectBridge: lease released: ...
-```
-
-The native Odin JNI layer loads and executes correctly:
-- `libwaydirect_engine.so` loads via `System.loadLibrary("waydirect_engine")`
-- `JNI_OnLoad` sets the JavaVM for `android.jni_env()`
-- `route_action(ACTION_INIT_APP_PATHS, ...)` calls Odin's `dispatch_action` → `init_app_paths_internal`
-- Returns proper JSON: `{"status":"paths_set","all_ready":true,...}`
-- Bridge lease system works for index files
-
-**No crashes** — AndroidRuntime clean.
+Verified:
+- `libwaydirect_engine.so` loads
+- `JNI_OnLoad` / path init / lease system work
+- No AndroidRuntime crashes on the exercised path
 
 ## 4. Remaining work after device test
 
-1. Verify all 19 action IDs match between `NativeEngine.java` and `waydirect_core.odin` `route_action`
+1. Verify all action IDs still match between `NativeEngine.java` and `waydirect_core.odin`
 2. Test each screen: Home, Files, Storage, Transfer, Cleaner, Internals
-3. Verify file-backed protocol: large results return `{status, path}`, Java reads from `PathCache`
-4. Port remaining `.cpp` FFI files to pure Odin (see Step 1)
-5. Consider `odin bundle android` for CI builds of the native portion
+3. Verify file-backed protocol end-to-end
+4. Optional: delete the dead `storage/modules/*/src/*.cpp` files
+5. Optional: use `odin bundle android` in CI only for the native `.so` packaging smoke test (not as the primary APK path)
+6. Media metadata extraction (still a pure-Odin opportunity)

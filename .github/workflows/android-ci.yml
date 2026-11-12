@@ -2,9 +2,9 @@ name: Android CI
 
 on:
   push:
-    branches: [ main, restructure_ui, ui_home_files_work ]
+    branches: [ main, restructure_ui, ui_home_files_work, experiment/use_official_odin_android_bindings ]
   pull_request:
-    branches: [ main, restructure_ui ]
+    branches: [ main, restructure_ui, experiment/use_official_odin_android_bindings ]
 
 jobs:
   unit-tests:
@@ -28,11 +28,12 @@ jobs:
         run: chmod +x gradlew
 
       # Unit tests compile app sources; native build needs NDK.
-      # Install NDK side-by-side with the version in app/build.gradle.
+      # Install NDK side-by-side with the version in app/build.gradle / build-android.ps1.
       - name: Install NDK
         run: |
           sdkmanager --install "ndk;29.0.14206865" "cmake;3.22.1" || \
-          sdkmanager --install "ndk;26.1.10909125" "cmake;3.22.1"
+          sdkmanager --install "ndk;26.1.10909125" "cmake;3.22.1" || \
+          sdkmanager --install "ndk;27.0.12077973" "cmake;3.22.1"
 
       - name: Run unit tests
         run: ./gradlew :app:testDebugUnitTest --stacktrace
