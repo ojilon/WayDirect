@@ -22,7 +22,10 @@ import com.waydirect.core.Config;
 import com.waydirect.core.GlassBlur;
 import com.waydirect.core.ThemePrefs;
 import com.waydirect.core.UiChrome;
+
+//fragment_transfer.xml becomes FragmentTransferBinding
 import com.waydirect.databinding.FragmentTransferBinding;
+
 import com.waydirect.network.NetworkCallback;
 import com.waydirect.network.NetworkManager;
 import com.waydirect.storage.FileIndexer;
