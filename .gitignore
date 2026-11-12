@@ -10,6 +10,7 @@ build/
 
 # App-specific build outputs
 app/build/
+app/src/main/jniLibs/
 
 collect_context.py
 context.txt
