@@ -1,46 +1,70 @@
 // =============================================================================
-// route_log_sample.odin — SAMPLE for per-route daily logs from native
+// route_log_sample.odin — how native should append to Java RouteLogger files
 //
-// Java writes:  <logsDir>/<route>/YYYY-MM-DD.log  via RouteLogger
-// Native should append to the same file when Java passes log_path in the payload.
+// Java path:  <logsDir>/<route>/YYYY-MM-DD.log
+// Line form:  HH:mm:ss.mmm [I|W|E] message\n
 //
-// Suggested payload convention (pipe-separated, last field):
-//   ...|log_path
-//
-// Copy the helpers below into a real package (e.g. core) and call:
-//   route_log_append(log_path, "I", "step_name detail")
-// at each stage of a native action. Do NOT use core:os file APIs on Android —
-// use the existing C FS wrappers (open/write/close) or a thin append helper.
-//
-// This file is documentation + sample only until you wire it into the build.
+// Wire this into package core (or storage) and call when payload ends with
+// |log_path. Uses fopen("a")/fwrite — bionic-safe, same idea as android_fs.c.
+// Not yet in the build; copy procs into a compiled .odin when ready.
 // =============================================================================
 
 package core_heart
 
+import "core:c"
 import "core:fmt"
 import "core:strings"
 import "core:time"
 
-// Sample signature — implement with android_fs / fopen append.
-// Returns false if path empty or write failed.
+foreign import libc "system:c"
+
+@(default_calling_convention = "c")
+foreign libc {
+	fopen  :: proc(path: cstring, mode: cstring) -> rawptr ---
+	fwrite :: proc(ptr: rawptr, size: c.size_t, nmemb: c.size_t, stream: rawptr) -> c.size_t ---
+	fclose :: proc(stream: rawptr) -> c.int ---
+	fflush :: proc(stream: rawptr) -> c.int ---
+}
+
 route_log_append :: proc(log_path: string, level: string, message: string) -> bool {
 	if len(log_path) == 0 {
 		return false
 	}
-	// TODO: open log_path with O_APPEND via C wrapper, write one line:
-	//   HH:MM:SS.mmm [level] message\n
-	// Example line format (match Java RouteLogger):
-	//   14:22:01.123 [I] write_storage_stats start root=/storage/emulated/0
-	_ = level
-	_ = message
-	return false // placeholder until FS append is wired
+	now := time.now()
+	h, m, s := time.clock(now)
+	line := fmt.tprintf("%02d:%02d:%02d [%s] %s\n", h, m, s, level, message)
+
+	cpath := strings.clone_to_cstring(log_path, context.temp_allocator)
+	f := fopen(cpath, "a")
+	if f == nil {
+		return false
+	}
+	defer fclose(f)
+	bytes := transmute([]u8)line
+	n := fwrite(raw_data(bytes), 1, c.size_t(len(bytes)), f)
+	fflush(f)
+	return int(n) == len(bytes)
 }
 
-// Call at the start of a native action when payload includes log_path.
 route_log_step :: proc(log_path: string, step: string, detail: string) {
 	msg := step
 	if len(detail) > 0 {
 		msg = fmt.tprintf("%s | %s", step, detail)
 	}
 	_ = route_log_append(log_path, "I", msg)
+}
+
+// Last '|' field of a pipe-separated payload is the log path (Java convention).
+payload_log_path :: proc(payload: string) -> string {
+	idx := -1
+	for i := len(payload) - 1; i >= 0; i -= 1 {
+		if payload[i] == '|' {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 || idx + 1 >= len(payload) {
+		return ""
+	}
+	return payload[idx + 1:]
 }
