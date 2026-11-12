@@ -145,6 +145,15 @@ $Sources = @(
 
 $Sysroot = "$Ndk/sysroot"
 
+# Include paths for remaining native headers (after .cpp/.hpp purge)
+$IncPaths = @(
+    "-I$Native/core/include"
+    "-I$Native/storage/include"
+    "-I$Native/documents/include"
+    "-I$Native/transfer/include"
+    "-I$Native/file_system_bridge/include"
+)
+
 $Flags = @(
     "-target", "aarch64-linux-android$MinApi"
     "--sysroot=$Sysroot"
@@ -156,7 +165,7 @@ $Flags = @(
     "-Wextra"
     "-I$Sysroot/usr/include"
     "-I$Sysroot/usr/include/aarch64-linux-android"
-)
+) + $IncPaths
 
 $CppObjects = @()
 
