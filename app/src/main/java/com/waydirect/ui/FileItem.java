@@ -1,16 +1,16 @@
 package com.waydirect.ui;
 
 /**
- * Simple data class for one row in the Files list / search results.
- * Java only displays; C++ supplies the data via bulk JSON.
+ * One row in the Files list / search results.
+ * Public final fields — no getters needed; treat as read-only data.
  */
 public class FileItem {
 
-    private final String name;
-    private final String path;       // full path (needed for open / browse)
-    private final String details;    // e.g. "Folder" or "2.4 MB"
-    private final boolean directory;
-    private final long sizeBytes;    // 0 for folders
+    public final String name;
+    public final String path;       // full path (open / browse)
+    public final String details;    // e.g. "Folder" or "2.4 MB"
+    public final boolean directory;
+    public final long sizeBytes;    // 0 for folders
 
     public FileItem(String name, String path, String details, boolean directory, long sizeBytes) {
         this.name = name;
@@ -19,25 +19,4 @@ public class FileItem {
         this.directory = directory;
         this.sizeBytes = sizeBytes;
     }
-
-    public String getName() {
-        return name;
-    }
-
-    public String getPath() {
-        return path;
-    }
-
-    public String getDetails() {
-        return details;
-    }
-
-    public boolean isDirectory() {
-        return directory;
-    }
-
-    public long getSizeBytes() {
-        return sizeBytes;
-    }
 }
-

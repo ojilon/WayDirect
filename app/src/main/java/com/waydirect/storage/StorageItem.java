@@ -1,10 +1,11 @@
 package com.waydirect.storage;
 
+/** One entry when browsing storage — public final fields, no getters. */
 public class StorageItem {
-    private final String name;
-    private final String path;
-    private final boolean isDirectory;
-    private final long size;
+    public final String name;
+    public final String path;
+    public final boolean isDirectory;
+    public final long size;
 
     public StorageItem(String name, String path, boolean isDirectory, long size) {
         this.name = name;
@@ -12,9 +13,4 @@ public class StorageItem {
         this.isDirectory = isDirectory;
         this.size = size;
     }
-
-    public String getName() { return name; }
-    public String getPath() { return path; }
-    public boolean isDirectory() { return isDirectory; }
-    public long getSize() { return size; }
 }
