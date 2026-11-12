@@ -1,11 +1,9 @@
 package com.waydirect.ui;
 
 import android.os.Bundle;
-import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.inputmethod.EditorInfo;
 import android.widget.ArrayAdapter;
 import android.widget.Toast;
 
@@ -19,6 +17,7 @@ import com.waydirect.R;
 import com.waydirect.bridge.NativeEngine;
 import com.waydirect.bridge.PathCache;
 import com.waydirect.bridge.PathRegistry;
+import com.waydirect.bridge.RouteLogger;
 import com.waydirect.core.Config;
 import com.waydirect.core.GlassBlur;
 import com.waydirect.core.ThemePrefs;
@@ -30,6 +29,7 @@ import com.waydirect.storage.FileIndexer;
 import com.waydirect.transfer.RecentTransfersStore;
 import com.waydirect.transfer.TransferController;
 import com.waydirect.transfer.TransferQueue;
+import com.waydirect.utils.FormatSizes;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -42,7 +42,17 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 
+/**
+ * Transfer screen — connection, download/upload, local search, browse-for-save,
+ * recent history, and in-session queue.
+ *
+ * Layout: fragment_transfer.xml (ViewFlipper tabs + end drawer for Appearance).
+ * Native: index search + build; network ops via NetworkManager / TransferController.
+ * Logging: RouteLogger under route "transfer".
+ */
 public class TransferFragment extends Fragment {
+
+    private static final String ROUTE = "transfer";
 
     private FragmentTransferBinding binding;
 
@@ -56,16 +66,38 @@ public class TransferFragment extends Fragment {
     private FileAdapter recentAdapter;
     private FileAdapter searchAdapter;
     private FileAdapter sessionAdapter;
+
+    private final List<FileItem> browseFiles = new ArrayList<>();
+    private final List<FileItem> searchResultRows = new ArrayList<>();
+    private final List<String> searchNavStack = new ArrayList<>();
+
     private volatile boolean queueCancelled = false;
 
+    // -------------------------------------------------------------------------
+    // Lifecycle
+    // -------------------------------------------------------------------------
+
     @Override
-    public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+    public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container,
+                             Bundle savedInstanceState) {
         binding = FragmentTransferBinding.inflate(inflater, container, false);
-        if (browsePath == null) browsePath = FileIndexer.getDefaultSavePath();
+        if (browsePath == null) {
+            browsePath = FileIndexer.getDefaultSavePath();
+        }
         setupUI();
         ensureIndexWarm();
         return binding.getRoot();
     }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        binding = null;
+    }
+
+    // -------------------------------------------------------------------------
+    // UI wiring
+    // -------------------------------------------------------------------------
 
     private void setupUI() {
         binding.connectionDetails.setText("Target: " + Config.HOST + ":" + Config.PORT);
@@ -74,16 +106,31 @@ public class TransferFragment extends Fragment {
         updateSavePathLabel();
         updateThemeLabel();
 
-        binding.btnTestConnection.setOnClickListener(v -> testConnection());
-        binding.btnStartListener.setOnClickListener(v -> startListener());
-        binding.btnDownload.setOnClickListener(v -> runDownload());
-        binding.btnUpload.setOnClickListener(v -> runUploadSearch());
+        binding.btnTestConnection.setOnClickListener(v -> {
+            RouteLogger.step(requireContext(), ROUTE, "ui", "testConnection");
+            testConnection();
+        });
+        binding.btnStartListener.setOnClickListener(v -> {
+            RouteLogger.step(requireContext(), ROUTE, "ui", "startListener");
+            startListener();
+        });
+        binding.btnDownload.setOnClickListener(v -> {
+            RouteLogger.step(requireContext(), ROUTE, "ui", "download");
+            runDownload();
+        });
+        binding.btnUpload.setOnClickListener(v -> {
+            RouteLogger.step(requireContext(), ROUTE, "ui", "uploadSearch");
+            runUploadSearch();
+        });
 
         binding.btnOpenTransferDrawer.setOnClickListener(v ->
                 binding.transferDrawerLayout.openDrawer(GravityCompat.END));
 
         binding.btnChangeSave.setOnClickListener(v -> showBrowseTab());
-        binding.btnRefreshIndexer.setOnClickListener(v -> refreshIndexer());
+        binding.btnRefreshIndexer.setOnClickListener(v -> {
+            RouteLogger.step(requireContext(), ROUTE, "ui", "refreshIndexer");
+            refreshIndexer();
+        });
         binding.btnTheme.setOnClickListener(v -> {
             String label = ThemePrefs.cycle(requireContext());
             updateThemeLabel();
@@ -98,7 +145,8 @@ public class TransferFragment extends Fragment {
             boolean on = ThemePrefs.toggleBlur(requireContext());
             GlassBlur.applyFromPrefs(binding.transferSidebarRoot, requireContext());
             updateThemeLabel();
-            Toast.makeText(getContext(), on ? "Glass blur on" : "Glass blur off", Toast.LENGTH_SHORT).show();
+            Toast.makeText(getContext(), on ? "Glass blur on" : "Glass blur off",
+                    Toast.LENGTH_SHORT).show();
         });
         binding.btnBackToTransfer.setOnClickListener(v -> showTransferTab());
         binding.btnUseThisFolder.setOnClickListener(v -> {
@@ -114,9 +162,43 @@ public class TransferFragment extends Fragment {
         setupRecentList();
         setupSessionList();
         setupTabs();
+
         GlassBlur.applyFromPrefs(binding.transferSidebarRoot, requireContext());
         binding.transferTabs.check(R.id.tab_transfer);
     }
+
+    private void setupTabs() {
+        binding.transferTabs.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
+            if (!isChecked) return;
+            if (checkedId == R.id.tab_guide) {
+                binding.transferViewFlipper.setDisplayedChild(0);
+            } else if (checkedId == R.id.tab_transfer) {
+                binding.transferViewFlipper.setDisplayedChild(1);
+            } else if (checkedId == R.id.tab_search) {
+                binding.transferViewFlipper.setDisplayedChild(2);
+            } else if (checkedId == R.id.tab_browse) {
+                binding.transferViewFlipper.setDisplayedChild(3);
+            } else if (checkedId == R.id.tab_network) {
+                binding.transferViewFlipper.setDisplayedChild(4);
+            }
+        });
+    }
+
+    private void showTransferTab() {
+        binding.transferTabs.check(R.id.tab_transfer);
+    }
+
+    private void showBrowseTab() {
+        binding.transferTabs.check(R.id.tab_browse);
+        loadBrowseDirectory(browsePath);
+        if (!binding.transferDrawerLayout.isDrawerOpen(GravityCompat.END)) {
+            binding.transferDrawerLayout.openDrawer(GravityCompat.END);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Session queue
+    // -------------------------------------------------------------------------
 
     private void setupSessionList() {
         sessionAdapter = new FileAdapter();
@@ -125,7 +207,7 @@ public class TransferFragment extends Fragment {
         sessionAdapter.setOnItemClickListener(new FileAdapter.OnItemClickListener() {
             @Override
             public void onItemClick(FileItem item) {
-                Toast.makeText(getContext(), item.getDetails(), Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), item.details, Toast.LENGTH_SHORT).show();
             }
 
             @Override
@@ -135,12 +217,13 @@ public class TransferFragment extends Fragment {
         });
         binding.btnCancelQueue.setOnClickListener(v -> {
             queueCancelled = true;
-            Toast.makeText(getContext(), "Finishing current fileâ€¦", Toast.LENGTH_SHORT).show();
+            RouteLogger.step(requireContext(), ROUTE, "queue", "cancelRequested");
+            Toast.makeText(getContext(), "Finishing current file…", Toast.LENGTH_SHORT).show();
         });
         renderSessionQueue();
     }
 
-    /** Session rows straight from the queue file â€” the same file the uploader writes. */
+    /** Session rows straight from the queue file — the same file the uploader writes. */
     private void renderSessionQueue() {
         if (binding == null) return;
         List<FileItem> rows = new ArrayList<>();
@@ -162,6 +245,11 @@ public class TransferFragment extends Fragment {
         if (binding == null) return;
         binding.sessionQueueStatus.setText(text);
     }
+
+    // -------------------------------------------------------------------------
+    // Recent transfers
+    // -------------------------------------------------------------------------
+
     private void setupRecentList() {
         recentAdapter = new FileAdapter();
         binding.recentTransfersList.setLayoutManager(new LinearLayoutManager(requireContext()));
@@ -169,8 +257,7 @@ public class TransferFragment extends Fragment {
         recentAdapter.setOnItemClickListener(new FileAdapter.OnItemClickListener() {
             @Override
             public void onItemClick(FileItem item) {
-                // name only; optional fill filename field
-                binding.transferFilename.setText(item.getName());
+                binding.transferFilename.setText(item.name);
             }
 
             @Override
@@ -195,7 +282,7 @@ public class TransferFragment extends Fragment {
         binding.recentTransfersList.setVisibility(View.VISIBLE);
         List<FileItem> items = new ArrayList<>();
         for (RecentTransfersStore.Entry e : entries) {
-            String details = (e.download ? "Download" : "Upload") + " Â· " + e.detail;
+            String details = (e.download ? "Download" : "Upload") + " · " + e.detail;
             items.add(new FileItem(e.name, e.detail, details, false, 0));
         }
         recentAdapter.submitList(items);
@@ -204,19 +291,12 @@ public class TransferFragment extends Fragment {
     private void recordSuccess(boolean download, String name, String detail) {
         RecentTransfersStore.add(requireContext(), download, name, detail);
         refreshRecentUi();
+        RouteLogger.step(requireContext(), ROUTE, download ? "download_ok" : "upload_ok", name);
     }
 
-    private void updateThemeLabel() {
-        if (binding == null) return;
-        binding.themeLabel.setText("Theme: " + ThemePrefs.currentLabel(requireContext()));
-        binding.btnTheme.setText("Cycle theme (" + ThemePrefs.currentLabel(requireContext()) + ")");
-        boolean blur = ThemePrefs.isBlurEnabled(requireContext());
-        String blurTxt = !GlassBlur.isSupported()
-                ? "Glass blur: N/A (API < 31)"
-                : (blur ? "Glass blur: On" : "Glass blur: Off");
-        binding.blurLabel.setText(blurTxt);
-        binding.btnBlur.setText(GlassBlur.isSupported() ? "Toggle glass blur" : "Blur unavailable");
-    }
+    // -------------------------------------------------------------------------
+    // Browse (save-folder picker)
+    // -------------------------------------------------------------------------
 
     private void setupBrowseList() {
         browseAdapter = new FileAdapter();
@@ -226,18 +306,18 @@ public class TransferFragment extends Fragment {
         browseAdapter.setOnItemClickListener(new FileAdapter.OnItemClickListener() {
             @Override
             public void onItemClick(FileItem item) {
-                if (item.isDirectory()) {
-                    browsePath = item.getPath();
+                if (item.directory) {
+                    browsePath = item.path;
                     loadBrowseDirectory(browsePath);
                 }
             }
 
             @Override
             public void onItemLongClick(FileItem item) {
-                if (item.isDirectory()) {
-                    savePath = item.getPath();
+                if (item.directory) {
+                    savePath = item.path;
                     updateSavePathLabel();
-                    Toast.makeText(getContext(), "Save folder: " + item.getName(), Toast.LENGTH_SHORT).show();
+                    Toast.makeText(getContext(), "Save folder: " + item.name, Toast.LENGTH_SHORT).show();
                 }
             }
         });
@@ -252,22 +332,14 @@ public class TransferFragment extends Fragment {
         });
 
         binding.browseFilter.addTextChangedListener(new android.text.TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-            }
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-            }
-
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
             @Override
             public void afterTextChanged(android.text.Editable s) {
                 applyBrowseFilter(s != null ? s.toString() : "");
             }
         });
     }
-
-    private final List<FileItem> browseFiles = new ArrayList<>();
 
     private void applyBrowseFilter(String query) {
         if (binding == null) return;
@@ -278,189 +350,11 @@ public class TransferFragment extends Fragment {
         String q = query.trim().toLowerCase();
         List<FileItem> filtered = new ArrayList<>();
         for (FileItem item : browseFiles) {
-            if (item.getName().toLowerCase().contains(q)) {
+            if (item.name.toLowerCase().contains(q)) {
                 filtered.add(item);
             }
         }
         browseAdapter.submitList(filtered);
-    }
-
-    private void setupSearchTab() {
-        searchAdapter = new FileAdapter();
-        binding.searchResultsList.setLayoutManager(new LinearLayoutManager(requireContext()));
-        binding.searchResultsList.setAdapter(searchAdapter);
-
-        searchAdapter.setOnItemClickListener(new FileAdapter.OnItemClickListener() {
-            @Override
-            public void onItemClick(FileItem item) {
-                if (item.isDirectory()) {
-                    // Browse inside this tab â€” independent stack, Up returns.
-                    enterSearchFolder(item.getPath());
-                }
-            }
-
-            @Override
-            public void onItemLongClick(FileItem item) {
-                // no-op
-            }
-        });
-        searchAdapter.setOnSelectionChangedListener(count -> updateSearchSendButton());
-
-        binding.btnSearchUp.setOnClickListener(v -> searchUp());
-
-        binding.btnSearchSelect.setOnClickListener(v -> {
-            searchAdapter.setSelectionMode(!searchAdapter.isSelectionMode());
-            binding.btnSearchSelect.setText(searchAdapter.isSelectionMode() ? "Done" : "Select");
-            updateSearchSendButton();
-        });
-        binding.btnSearchSend.setOnClickListener(v -> uploadSearchSelected());
-        binding.btnRunSearch.setOnClickListener(v -> runSearchTab());
-        binding.searchInput.setOnEditorActionListener((v, actionId, event) -> {
-            boolean isSearch = actionId == EditorInfo.IME_ACTION_SEARCH
-                    || (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER);
-            if (isSearch) {
-                runSearchTab();
-                return true;
-            }
-            return false;
-        });
-        updateSearchSendButton();
-    }
-
-    private void updateSearchSendButton() {
-        if (binding == null) return;
-        int count = searchAdapter != null ? searchAdapter.getSelectedPaths().size() : 0;
-        binding.btnSearchSend.setEnabled(count > 0);
-        binding.btnSearchSend.setText(count > 0 ? "Send (" + count + ")" : "Send");
-    }
-
-    private void runSearchTab() {
-        String query = binding.searchInput.getText() != null
-                ? binding.searchInput.getText().toString().trim() : "";
-        if (query.isEmpty()) {
-            Toast.makeText(getContext(), "Enter a file name to search", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        String dir = PathRegistry.moduleDir(getContext(), "search");
-        if (dir.isEmpty()) {
-            Toast.makeText(getContext(), "Storage not ready", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        String out = dir + "/transfer-search-tab.json";
-        PathCache.remember("transfer-search-tab", out);
-        binding.searchResultsHint.setText("Searchingâ€¦");
-        NativeEngine.searchIndexAsync(requireContext(), query, 50, out, rawJson -> {
-            if (binding == null) return;
-            if ("busy".equals(PathCache.reason(rawJson))) {
-                binding.searchResultsHint.setText("Busy â€” try again");
-                return;
-            }
-            renderSearchResults(PathCache.readFile(PathCache.envelopePath(rawJson)));
-        });
-    }
-
-    /** Files first, then their distinct parent folders (tap a folder to browse it here). */
-    private void renderSearchResults(String content) {
-        List<FileItem> rows = new ArrayList<>();
-        List<String> folders = new ArrayList<>();
-        if (content != null) {
-            try {
-                JSONArray matches = new JSONObject(content).optJSONArray("matches");
-                if (matches != null) {
-                    for (int i = 0; i < matches.length(); i++) {
-                        String path = matches.getString(i);
-                        File f = new File(path);
-                        rows.add(new FileItem(f.getName(), path, "File", false, 0));
-                        String parent = f.getParent();
-                        if (parent != null && !folders.contains(parent)) {
-                            folders.add(parent);
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-        for (String folder : folders) {
-            File f = new File(folder);
-            rows.add(new FileItem(f.getName(), folder, "Folder â€” tap to browse", true, 0));
-        }
-        searchResultRows.clear();
-        searchResultRows.addAll(rows);
-        searchNavStack.clear();
-        searchAdapter.submitList(new ArrayList<>(rows));
-        binding.searchResultsHint.setText(rows.isEmpty()
-                ? "No matches â€” try Refresh index"
-                : rows.size() + " result(s)");
-    }
-
-    /** Independent folder stack for the Search tab â€” results persist underneath. */
-    private final List<String> searchNavStack = new ArrayList<>();
-    private final List<FileItem> searchResultRows = new ArrayList<>();
-
-    private void enterSearchFolder(String path) {
-        searchNavStack.add(path);
-        listSearchFolder(path);
-    }
-
-    private void searchUp() {
-        if (binding == null) return;
-        if (searchNavStack.isEmpty()) {
-            Toast.makeText(getContext(), "Already showing results", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        searchNavStack.remove(searchNavStack.size() - 1);
-        if (searchNavStack.isEmpty()) {
-            searchAdapter.submitList(new ArrayList<>(searchResultRows));
-            binding.searchResultsHint.setText(searchResultRows.isEmpty()
-                    ? "No matches â€” try Refresh index"
-                    : searchResultRows.size() + " result(s)");
-        } else {
-            listSearchFolder(searchNavStack.get(searchNavStack.size() - 1));
-        }
-    }
-
-    private void listSearchFolder(String path) {
-        if (binding == null) return;
-        List<FileItem> rows = new ArrayList<>();
-        File[] children = new File(path).listFiles();
-        if (children != null) {
-            Arrays.sort(children, Comparator
-                    .comparing((File f) -> !f.isDirectory())
-                    .thenComparing(f -> f.getName().toLowerCase()));
-            for (File c : children) {
-                if (c.isDirectory()) {
-                    rows.add(new FileItem(c.getName(), c.getAbsolutePath(), "Folder", true, 0));
-                } else {
-                    rows.add(new FileItem(c.getName(), c.getAbsolutePath(), formatSize(c.length()), false, c.length()));
-                }
-            }
-        }
-        searchAdapter.submitList(rows);
-        binding.searchResultsHint.setText(path);
-    }
-
-    private void setupTabs() {
-        binding.transferTabs.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
-            if (!isChecked) return;
-            if (checkedId == R.id.tab_guide) binding.transferViewFlipper.setDisplayedChild(0);
-            else if (checkedId == R.id.tab_transfer) binding.transferViewFlipper.setDisplayedChild(1);
-            else if (checkedId == R.id.tab_search) binding.transferViewFlipper.setDisplayedChild(2);
-            else if (checkedId == R.id.tab_browse) binding.transferViewFlipper.setDisplayedChild(3);
-            else if (checkedId == R.id.tab_network) binding.transferViewFlipper.setDisplayedChild(4);
-        });
-    }
-
-    private void showTransferTab() {
-        binding.transferTabs.check(R.id.tab_transfer);
-    }
-
-    private void showBrowseTab() {
-        binding.transferTabs.check(R.id.tab_browse);
-        loadBrowseDirectory(browsePath);
-        if (!binding.transferDrawerLayout.isDrawerOpen(GravityCompat.END)) {
-            binding.transferDrawerLayout.openDrawer(GravityCompat.END);
-        }
     }
 
     private void loadBrowseDirectory(String path) {
@@ -468,7 +362,7 @@ public class TransferFragment extends Fragment {
         BrowseSession.transferBrowsePath = path;
         binding.browseCurrentPath.setText(path);
 
-        // Plain directory listing â€” no index involved. The native index only
+        // Plain directory listing — no index involved. The native index only
         // serves global name search; browsing one folder never needs it.
         List<FileItem> items = new ArrayList<>();
         File[] children = new File(path).listFiles();
@@ -487,138 +381,280 @@ public class TransferFragment extends Fragment {
             int slash = path.lastIndexOf('/');
             if (slash > 0) {
                 String parent = path.substring(0, slash);
-                items.add(0, new FileItem("..", parent, "Parent", true, 0));
+                items.add(0, new FileItem("..", parent, "Up", true, 0));
             }
         }
 
         browseFiles.clear();
         browseFiles.addAll(items);
-        String filter = binding.browseFilter.getText() != null
-                ? binding.browseFilter.getText().toString() : "";
-        applyBrowseFilter(filter);
+        browseAdapter.submitList(new ArrayList<>(items));
+        applyBrowseFilter(binding.browseFilter.getText() != null
+                ? binding.browseFilter.getText().toString() : "");
     }
 
-    /** Index file shared with every other screen; builds it when missing. */
+    private void updateSavePathLabel() {
+        if (binding == null) return;
+        binding.savePathLabel.setText("Save to: " + savePath);
+    }
+
+    // -------------------------------------------------------------------------
+    // Search tab (index-backed)
+    // -------------------------------------------------------------------------
+
+    private void setupSearchTab() {
+        searchAdapter = new FileAdapter();
+        binding.searchResultsList.setLayoutManager(new LinearLayoutManager(requireContext()));
+        binding.searchResultsList.setAdapter(searchAdapter);
+
+        searchAdapter.setOnItemClickListener(new FileAdapter.OnItemClickListener() {
+            @Override
+            public void onItemClick(FileItem item) {
+                if (item.directory) {
+                    enterSearchFolder(item.path);
+                }
+            }
+
+            @Override
+            public void onItemLongClick(FileItem item) {
+                // no-op
+            }
+        });
+        searchAdapter.setOnSelectionChangedListener(count -> updateSearchSendButton());
+
+        binding.btnSearchGo.setOnClickListener(v -> runSearchTab());
+        binding.btnSearchUp.setOnClickListener(v -> searchUp());
+        binding.btnSearchSelect.setOnClickListener(v -> {
+            boolean next = !searchAdapter.isSelectionMode();
+            searchAdapter.setSelectionMode(next);
+            binding.btnSearchSelect.setText(next ? "Cancel" : "Select");
+            updateSearchSendButton();
+        });
+        binding.btnSearchSend.setOnClickListener(v -> uploadSearchSelected());
+        updateSearchSendButton();
+    }
+
+    private void updateSearchSendButton() {
+        if (binding == null) return;
+        int n = searchAdapter.getSelectedCount();
+        binding.btnSearchSend.setEnabled(n > 0);
+        binding.btnSearchSend.setText(n > 0 ? "Send (" + n + ")" : "Send");
+    }
+
+    private void runSearchTab() {
+        String q = binding.searchQuery.getText() != null
+                ? binding.searchQuery.getText().toString().trim() : "";
+        if (q.isEmpty()) {
+            Toast.makeText(getContext(), "Enter a name to search", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        RouteLogger.step(requireContext(), ROUTE, "search_tab", q);
+        binding.searchResultsHint.setText("Searching…");
+        searchNavStack.clear();
+
+        NativeEngine.indexMetaAsync(rawMeta -> {
+            if (!isAdded()) return;
+            if (isIndexMissing(rawMeta)) {
+                binding.searchResultsHint.setText("Index missing — building…");
+                NativeEngine.buildIndexAsync(requireContext(), FileIndexer.DEFAULT_ROOT,
+                        rawBuild -> runOnUi(() -> doSearchTab(q)));
+            } else {
+                doSearchTab(q);
+            }
+        });
+    }
+
+    private void doSearchTab(String q) {
+        String dir = PathRegistry.moduleDir(getContext(), "search");
+        if (dir.isEmpty()) {
+            binding.searchResultsHint.setText("Storage not ready");
+            return;
+        }
+        String out = dir + "/transfer-tab-matches.json";
+        PathCache.remember("transfer-tab-search", out);
+        NativeEngine.searchIndexAsync(requireContext(), q, 80, out, rawJson -> {
+            if (!isAdded()) return;
+            if ("busy".equals(PathCache.reason(rawJson))) {
+                binding.searchResultsHint.setText("Search busy — try again");
+                return;
+            }
+            String content = PathCache.readFile(PathCache.envelopePath(rawJson));
+            renderSearchResults(content);
+        });
+    }
+
+    private void renderSearchResults(String content) {
+        List<FileItem> rows = new ArrayList<>();
+        List<String> folders = new ArrayList<>();
+        if (content != null) {
+            try {
+                JSONArray array = new JSONObject(content).optJSONArray("matches");
+                if (array != null) {
+                    for (int i = 0; i < array.length(); i++) {
+                        String path = array.getString(i);
+                        File f = new File(path);
+                        rows.add(new FileItem(f.getName(), path, "File", false, 0));
+                        String parent = f.getParent();
+                        if (parent != null && !folders.contains(parent)) {
+                            folders.add(parent);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        for (String folder : folders) {
+            File f = new File(folder);
+            rows.add(new FileItem(f.getName(), folder, "Folder — tap to browse", true, 0));
+        }
+        searchResultRows.clear();
+        searchResultRows.addAll(rows);
+        searchNavStack.clear();
+        searchAdapter.submitList(new ArrayList<>(rows));
+        binding.searchResultsHint.setText(rows.isEmpty()
+                ? "No matches — try Refresh index"
+                : rows.size() + " result(s)");
+    }
+
+    /** Independent folder stack for the Search tab — results persist underneath. */
+    private void enterSearchFolder(String path) {
+        searchNavStack.add(path);
+        listSearchFolder(path);
+    }
+
+    private void searchUp() {
+        if (binding == null) return;
+        if (searchNavStack.isEmpty()) {
+            Toast.makeText(getContext(), "Already showing results", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        searchNavStack.remove(searchNavStack.size() - 1);
+        if (searchNavStack.isEmpty()) {
+            searchAdapter.submitList(new ArrayList<>(searchResultRows));
+            binding.searchResultsHint.setText(searchResultRows.isEmpty()
+                    ? "No matches — try Refresh index"
+                    : searchResultRows.size() + " result(s)");
+        } else {
+            listSearchFolder(searchNavStack.get(searchNavStack.size() - 1));
+        }
+    }
+
+    private void listSearchFolder(String path) {
+        if (binding == null) return;
+        List<FileItem> rows = new ArrayList<>();
+        File[] children = new File(path).listFiles();
+        if (children != null) {
+            Arrays.sort(children, Comparator
+                    .comparing((File f) -> !f.isDirectory())
+                    .thenComparing(f -> f.getName().toLowerCase()));
+            for (File c : children) {
+                if (c.isDirectory()) {
+                    rows.add(new FileItem(c.getName(), c.getAbsolutePath(), "Folder", true, 0));
+                } else {
+                    rows.add(new FileItem(c.getName(), c.getAbsolutePath(),
+                            FormatSizes.of(c.length()), false, c.length()));
+                }
+            }
+        }
+        searchAdapter.submitList(rows);
+        binding.searchResultsHint.setText(path);
+    }
+
+    // -------------------------------------------------------------------------
+    // Index helpers
+    // -------------------------------------------------------------------------
+
     private void ensureIndexWarm() {
         NativeEngine.indexMetaAsync(rawMeta -> {
             if (!isAdded()) return;
             if (isIndexMissing(rawMeta)) {
-                appendLog("Indexing local storage (background)â€¦");
-                NativeEngine.buildIndexAsync(requireContext(), FileIndexer.DEFAULT_ROOT, rawBuild -> {
-                    if (!isAdded()) return;
-                    appendLog("Index ready Â· " + buildCount(rawBuild) + " files");
-                });
-            } else {
-                appendLog("Index ready");
+                RouteLogger.step(requireContext(), ROUTE, "index", "warm_build");
+                NativeEngine.buildIndexAsync(requireContext(), FileIndexer.DEFAULT_ROOT, null);
             }
         });
     }
 
     private void refreshIndexer() {
-        appendLog("Refreshing native indexâ€¦");
-        binding.btnRefreshIndexer.setEnabled(false);
-        NativeEngine.buildIndexAsync(requireContext(), FileIndexer.DEFAULT_ROOT, rawJson -> {
-            if (binding == null) return;
-            binding.btnRefreshIndexer.setEnabled(true);
-            int count = buildCount(rawJson);
-            if (count >= 0) {
-                appendLog("Index refreshed Â· " + count + " files");
-                Toast.makeText(getContext(), "Index refreshed", Toast.LENGTH_SHORT).show();
-            } else {
-                appendLog("Index refresh failed");
-                Toast.makeText(getContext(), "Index refresh failed", Toast.LENGTH_SHORT).show();
-            }
-                if (binding.transferViewFlipper.getDisplayedChild() == 3) {
-                loadBrowseDirectory(browsePath);
-            }
+        RouteLogger.step(requireContext(), ROUTE, "index", "refresh");
+        appendLog("Refreshing index…");
+        NativeEngine.buildIndexAsync(requireContext(), FileIndexer.DEFAULT_ROOT, raw -> {
+            runOnUi(() -> appendLog("Index refresh finished"));
         });
     }
 
     private static boolean isIndexMissing(String rawMeta) {
+        if (rawMeta == null || rawMeta.isEmpty()) return true;
         try {
-            String status = new JSONObject(rawMeta).optString("status", "");
-            return status.equals("missing") || rawMeta.contains("paths_not_initialized");
+            JSONObject o = new JSONObject(rawMeta);
+            return !o.optBoolean("ready", false);
         } catch (Exception e) {
             return true;
         }
     }
 
-    private static int buildCount(String rawJson) {
-        try {
-            return new JSONObject(rawJson).optInt("count", -1);
-        } catch (Exception e) {
-            return -1;
-        }
-    }
-
-    private void updateSavePathLabel() {
-        if (binding == null) return;
-        binding.savePathHint.setText("Save downloads to: " + savePath);
-        binding.drawerSavePath.setText(savePath);
-    }
+    // -------------------------------------------------------------------------
+    // Connection / network
+    // -------------------------------------------------------------------------
 
     private void testConnection() {
-        appendLog("Testing connection to " + Config.HOST + ":" + Config.PORT + "â€¦");
-        binding.connectionStatus.setText("Testingâ€¦");
-
+        binding.connectionStatus.setText("Testing…");
         new Thread(() -> {
             boolean ok = false;
-            String message;
-            long start = System.currentTimeMillis();
-
-            try (Socket socket = new Socket()) {
-                socket.connect(new InetSocketAddress(Config.HOST, Config.PORT), 3000);
-                ok = socket.isConnected();
-                long ms = System.currentTimeMillis() - start;
-                message = ok ? "Connected (" + ms + " ms)" : "Not connected";
-            } catch (Exception e) {
-                message = "Failed: " + e.getMessage();
+            try (Socket s = new Socket()) {
+                s.connect(new InetSocketAddress(Config.HOST, Config.PORT), 2500);
+                ok = true;
+            } catch (Exception ignored) {
             }
-
             boolean finalOk = ok;
-            String finalMessage = message;
-
             runOnUi(() -> {
-                binding.connectionStatus.setText(finalMessage);
-                binding.connectionStatus.setTextColor(
-                        getResources().getColor(
-                                finalOk ? R.color.waydirect_success : R.color.waydirect_error, null));
-                appendLog(finalMessage);
+                binding.connectionStatus.setText(finalOk ? "Reachable" : "Unreachable");
+                RouteLogger.step(requireContext(), ROUTE, "connection",
+                        finalOk ? "ok" : "fail");
             });
         }).start();
     }
 
     private void startListener() {
-        appendLog("Starting listener on port 8080â€¦");
-        TransferController.startServerListener(8080, status -> runOnUi(() -> {
-            String line = "Listener: " + status.getStatus() + " port=" + status.getPort();
-            appendLog(line);
-        }));
+        RouteLogger.step(requireContext(), ROUTE, "listener", "start");
+        appendLog("Starting listener…");
+        // Delegate to existing controller / network stack.
+        TransferController.startListener(requireContext(), new NetworkCallback() {
+            @Override
+            public void onConsoleUpdate(String outputText) {
+                runOnUi(() -> appendLog(outputText));
+            }
+
+            @Override
+            public void onOperationComplete(String finalResult) {
+                runOnUi(() -> appendLog(finalResult != null ? finalResult : "Listener stopped"));
+            }
+        });
     }
+
+    // -------------------------------------------------------------------------
+    // Download
+    // -------------------------------------------------------------------------
 
     private void runDownload() {
         String name = binding.transferFilename.getText() != null
-                ? binding.transferFilename.getText().toString().trim()
-                : "";
-
+                ? binding.transferFilename.getText().toString().trim() : "";
         if (name.isEmpty()) {
-            Toast.makeText(getContext(), "Enter a file name", Toast.LENGTH_SHORT).show();
+            Toast.makeText(getContext(), "Enter a remote file name", Toast.LENGTH_SHORT).show();
             return;
         }
 
+        RouteLogger.step(requireContext(), ROUTE, "download_start", name);
+        appendLog("Downloading \"" + name + "\" → " + savePath);
+        setTransferButtonsEnabled(false);
+        long started = System.currentTimeMillis();
         File workingDir = new File(savePath);
         if (!workingDir.exists()) {
             //noinspection ResultOfMethodCallIgnored
             workingDir.mkdirs();
         }
 
-        String command = "/ask " + name;
-        appendLog("Download: " + name + " â†’ " + savePath);
-        setTransferButtonsEnabled(false);
-
-        long started = System.currentTimeMillis();
-
-        NetworkManager.processProtocolCommand(command, workingDir, new NetworkCallback() {
+        String command = "download " + name;
+        NetworkManager.runCommand(command, workingDir, new NetworkCallback() {
             @Override
             public void onConsoleUpdate(String outputText) {
                 runOnUi(() -> appendLog(outputText));
@@ -642,24 +678,29 @@ public class TransferFragment extends Fragment {
                                     String.format("Last transfer ~ %.1f KB/s (%d ms)", kbps, elapsed));
                         }
                         recordSuccess(true, name, savePath);
+                    } else {
+                        RouteLogger.step(requireContext(), ROUTE, "download_fail", name);
                     }
                 });
             }
         });
     }
 
+    // -------------------------------------------------------------------------
+    // Upload (search then send)
+    // -------------------------------------------------------------------------
+
     private void runUploadSearch() {
         String name = binding.transferFilename.getText() != null
-                ? binding.transferFilename.getText().toString().trim()
-                : "";
-
+                ? binding.transferFilename.getText().toString().trim() : "";
         if (name.isEmpty()) {
             Toast.makeText(getContext(), "Enter a file name to search", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        appendLog("Searching index for \"" + name + "\"â€¦");
+        appendLog("Searching index for \"" + name + "\"…");
         setTransferButtonsEnabled(false);
+        RouteLogger.step(requireContext(), ROUTE, "upload_search", name);
 
         // Global search runs on the shared native index (same file every
         // screen reads). Builds it first when missing, then searches.
@@ -669,7 +710,7 @@ public class TransferFragment extends Fragment {
                 return;
             }
             if (isIndexMissing(rawMeta)) {
-                appendLog("Index missing â€” building firstâ€¦");
+                appendLog("Index missing — building first…");
                 NativeEngine.buildIndexAsync(requireContext(), FileIndexer.DEFAULT_ROOT,
                         rawBuild -> runOnUi(() -> doUploadSearch(name)));
             } else {
@@ -691,13 +732,13 @@ public class TransferFragment extends Fragment {
             if (!isAdded()) return;
             setTransferButtonsEnabled(true);
             if ("busy".equals(PathCache.reason(rawJson))) {
-                Toast.makeText(getContext(), "Search busy â€” try again", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), "Search busy — try again", Toast.LENGTH_SHORT).show();
                 return;
             }
             List<String> matches = parseIndexMatches(PathCache.readFile(PathCache.envelopePath(rawJson)));
             if (matches.isEmpty()) {
                 appendLog("No local files matched \"" + name + "\"");
-                Toast.makeText(getContext(), "No matches â€” try Refresh index", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), "No matches — try Refresh index", Toast.LENGTH_SHORT).show();
                 return;
             }
             if (matches.size() == 1) {
@@ -729,7 +770,7 @@ public class TransferFragment extends Fragment {
         new AlertDialog.Builder(requireContext())
                 .setTitle("Upload this file?")
                 .setMessage(f.getName() + "\n\n" + absolutePath)
-                .setPositiveButton("Confirm upload", (d, w) -> performUpload(absolutePath))
+                .setPositiveButton("Confirm upload", (d, w) -> performUpload(absolutePath, null))
                 .setNegativeButton("Cancel", null)
                 .show();
     }
@@ -738,7 +779,7 @@ public class TransferFragment extends Fragment {
         String[] labels = new String[matches.size()];
         for (int i = 0; i < matches.size(); i++) {
             File f = new File(matches.get(i));
-            labels[i] = f.getName() + "  Â·  " + f.getParent();
+            labels[i] = f.getName() + "  ·  " + f.getParent();
         }
 
         ArrayAdapter<String> adapter = new ArrayAdapter<>(
@@ -749,7 +790,7 @@ public class TransferFragment extends Fragment {
 
         new AlertDialog.Builder(requireContext())
                 .setTitle("Choose file to upload (" + matches.size() + ")")
-                .setAdapter(adapter, (dialog, which) -> performUpload(matches.get(which)))
+                .setAdapter(adapter, (dialog, which) -> performUpload(matches.get(which), null))
                 .setNegativeButton("Cancel", null)
                 .show();
     }
@@ -775,42 +816,38 @@ public class TransferFragment extends Fragment {
         return files;
     }
 
-    private void uploadPaths(List<String> files) {
-        if (!TransferQueue.save(requireContext(), files)) {
+    private void uploadPaths(List<String> paths) {
+        if (paths == null || paths.isEmpty()) return;
+        if (!TransferQueue.save(requireContext(), paths)) {
             Toast.makeText(getContext(), "Cannot save queue", Toast.LENGTH_SHORT).show();
             return;
         }
         queueCancelled = false;
         setQueueActive(true);
-        setTransferButtonsEnabled(false);
-        appendLog("Queue: " + files.size() + " file(s)");
+        setQueueStatus("Queued " + paths.size());
+        RouteLogger.step(requireContext(), ROUTE, "queue_start", paths.size() + " files");
         renderSessionQueue();
-        uploadNext(0, files, 0);
+        uploadNext(0, paths, 0);
     }
 
     private void uploadNext(int index, List<String> paths, int sent) {
-        if (binding == null) return;
         if (queueCancelled) {
             queueCancelled = false;
             setQueueActive(false);
-            setTransferButtonsEnabled(true);
-            appendLog("Queue cancelled Â· " + sent + "/" + paths.size() + " sent");
-            setQueueStatus("Queue: cancelled (" + sent + "/" + paths.size() + ")");
+            setQueueStatus("Cancelled · " + sent + " sent");
+            RouteLogger.step(requireContext(), ROUTE, "queue", "cancelled after " + sent);
             renderSessionQueue();
             return;
         }
         if (index >= paths.size()) {
             setQueueActive(false);
-            setTransferButtonsEnabled(true);
-            appendLog("Queue done Â· " + sent + "/" + paths.size() + " sent");
-            setQueueStatus("Queue: done (" + sent + "/" + paths.size() + ")");
-            Toast.makeText(getContext(), "Sent " + sent + "/" + paths.size(), Toast.LENGTH_SHORT).show();
+            setQueueStatus("Done · " + sent + " of " + paths.size());
             renderSessionQueue();
+            RouteLogger.step(requireContext(), ROUTE, "queue", "done " + sent + "/" + paths.size());
             return;
         }
         String path = paths.get(index);
-        setQueueStatus("Queue: sending " + (index + 1) + "/" + paths.size());
-        appendLog("[" + (index + 1) + "/" + paths.size() + "] " + new File(path).getName());
+        setQueueStatus("Uploading " + new File(path).getName() + " (" + (index + 1) + "/" + paths.size() + ")");
         TransferQueue.setStatus(requireContext(), path, "sending");
         renderSessionQueue();
         performUpload(path, ok -> {
@@ -824,20 +861,22 @@ public class TransferFragment extends Fragment {
         void onDone(boolean ok);
     }
 
-    private void performUpload(String absolutePath) {
-        performUpload(absolutePath, null);
-    }
-
     private void performUpload(String absolutePath, UploadDone onDone) {
         File local = new File(absolutePath);
-        String command = "/upload " + absolutePath;
-        appendLog("Upload: " + local.getName() + " â† " + absolutePath);
+        if (!local.isFile()) {
+            Toast.makeText(getContext(), "Not a file", Toast.LENGTH_SHORT).show();
+            if (onDone != null) onDone.onDone(false);
+            return;
+        }
+
+        RouteLogger.step(requireContext(), ROUTE, "upload_start", local.getName());
+        appendLog("Uploading " + local.getName());
         setTransferButtonsEnabled(false);
-
         long started = System.currentTimeMillis();
-        File parent = local.getParentFile() != null ? local.getParentFile() : requireContext().getFilesDir();
+        File parent = local.getParentFile();
 
-        NetworkManager.processProtocolCommand(command, parent, new NetworkCallback() {
+        String command = "upload " + local.getName();
+        NetworkManager.runCommand(command, parent, new NetworkCallback() {
             @Override
             public void onConsoleUpdate(String outputText) {
                 runOnUi(() -> appendLog(outputText));
@@ -850,7 +889,8 @@ public class TransferFragment extends Fragment {
                     appendLog(finalResult);
                     setTransferButtonsEnabled(true);
 
-                    boolean ok = finalResult != null && finalResult.toLowerCase().contains("success");
+                    boolean ok = finalResult != null
+                            && finalResult.toLowerCase().contains("success");
                     if (ok) {
                         long bytes = local.exists() ? local.length() : 0;
                         sessionSentBytes += bytes;
@@ -861,12 +901,34 @@ public class TransferFragment extends Fragment {
                                     String.format("Last transfer ~ %.1f KB/s (%d ms)", kbps, elapsed));
                         }
                         recordSuccess(false, local.getName(), absolutePath);
+                    } else {
+                        RouteLogger.step(requireContext(), ROUTE, "upload_fail", local.getName());
                     }
                     if (onDone != null) onDone.onDone(ok);
                 });
             }
         });
     }
+
+    // -------------------------------------------------------------------------
+    // Theme / chrome
+    // -------------------------------------------------------------------------
+
+    private void updateThemeLabel() {
+        if (binding == null) return;
+        binding.themeLabel.setText("Theme: " + ThemePrefs.currentLabel(requireContext()));
+        binding.btnTheme.setText("Cycle theme (" + ThemePrefs.currentLabel(requireContext()) + ")");
+        boolean blur = ThemePrefs.isBlurEnabled(requireContext());
+        String blurTxt = !GlassBlur.isSupported()
+                ? "Glass blur: N/A (API < 31)"
+                : (blur ? "Glass blur: On" : "Glass blur: Off");
+        binding.blurLabel.setText(blurTxt);
+        binding.btnBlur.setText(GlassBlur.isSupported() ? "Toggle glass blur" : "Blur unavailable");
+    }
+
+    // -------------------------------------------------------------------------
+    // Small helpers
+    // -------------------------------------------------------------------------
 
     private void setTransferButtonsEnabled(boolean enabled) {
         if (binding == null) return;
@@ -877,14 +939,8 @@ public class TransferFragment extends Fragment {
     private void updateSessionStats() {
         if (binding == null) return;
         binding.sessionStats.setText(
-                "Sent: " + formatSize(sessionSentBytes)
-                        + " Â· Received: " + formatSize(sessionReceivedBytes));
-    }
-
-    private String formatSize(long bytes) {
-        if (bytes < 1024) return bytes + " B";
-        if (bytes < 1024 * 1024) return String.format("%.1f KB", bytes / 1024.0);
-        return String.format("%.1f MB", bytes / (1024.0 * 1024));
+                "Sent: " + FormatSizes.of(sessionSentBytes)
+                        + " · Received: " + FormatSizes.of(sessionReceivedBytes));
     }
 
     private void appendLog(String line) {
@@ -898,11 +954,4 @@ public class TransferFragment extends Fragment {
             if (binding != null) r.run();
         });
     }
-
-    @Override
-    public void onDestroyView() {
-        super.onDestroyView();
-        binding = null;
-    }
 }
-
