@@ -24,9 +24,11 @@ import com.waydirect.bridge.NativeCache;
 import com.waydirect.bridge.NativeEngine;
 import com.waydirect.bridge.PathCache;
 import com.waydirect.bridge.PathRegistry;
+import com.waydirect.bridge.RouteLogger;
 import com.waydirect.core.ThemePrefs;
 import com.waydirect.databinding.FragmentFilesBinding;
 import com.waydirect.storage.FileMutator;
+import com.waydirect.utils.FormatSizes;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -36,19 +38,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Files screen.
- * List/search via C++; create/rename/delete via FileMutator (shared).
- * Open routes through FileOpenHelper â†’ Image / Video / Document.
- * Left drawer includes Appearance â†’ Theme (System / Dark / Light).
+ * Files screen — browse, search, create/rename/delete.
+ * Native list/search; FileMutator for mutations; FileOpenHelper for open.
+ * Route logs: logs/files/YYYY-MM-DD.log
  */
 public class FilesFragment extends Fragment {
 
-    private static final int ACTION_LIST_FILES   = 3;
+    private static final String ROUTE = "files";
+    private static final int ACTION_LIST_FILES = 3;
     private static final String SEARCH_JOB = "search";
 
     private FragmentFilesBinding binding;
     private FileAdapter adapter;
-
     private String currentPath = BrowseSession.filesCurrentPath;
     private boolean showingSearchResults = false;
 
@@ -72,12 +73,12 @@ public class FilesFragment extends Fragment {
         adapter.setOnItemClickListener(new FileAdapter.OnItemClickListener() {
             @Override
             public void onItemClick(FileItem item) {
-                if (item.isDirectory()) {
+                if (item.directory) {
                     showingSearchResults = false;
                     binding.searchResultsHeader.setVisibility(View.GONE);
-                    loadDirectory(item.getPath());
+                    loadDirectory(item.path);
                 } else {
-                    FileOpenHelper.open(requireContext(), item.getPath());
+                    FileOpenHelper.open(requireContext(), item.path);
                 }
             }
 
@@ -137,28 +138,28 @@ public class FilesFragment extends Fragment {
     }
 
     private void showItemOptions(FileItem item) {
-        final String[] options = item.isDirectory()
+        final String[] options = item.directory
                 ? new String[]{"Browse folder", "Rename", "Delete", "Cancel"}
                 : new String[]{"Open file", "Open parent folder", "Rename", "Delete", "Cancel"};
 
         new AlertDialog.Builder(requireContext())
-                .setTitle(item.getName())
+                .setTitle(item.name)
                 .setItems(options, (dialog, which) -> {
-                    if (item.isDirectory()) {
+                    if (item.directory) {
                         switch (which) {
                             case 0 -> {
                                 showingSearchResults = false;
                                 binding.searchResultsHeader.setVisibility(View.GONE);
-                                loadDirectory(item.getPath());
+                                loadDirectory(item.path);
                             }
                             case 1 -> promptRename(item);
                             case 2 -> confirmDelete(item);
                         }
                     } else {
                         switch (which) {
-                            case 0 -> FileOpenHelper.open(requireContext(), item.getPath());
+                            case 0 -> FileOpenHelper.open(requireContext(), item.path);
                             case 1 -> {
-                                String parent = item.getPath();
+                                String parent = item.path;
                                 int slash = parent.lastIndexOf('/');
                                 if (slash > 0) {
                                     showingSearchResults = false;
@@ -177,14 +178,14 @@ public class FilesFragment extends Fragment {
     private void promptRename(FileItem item) {
         final EditText input = new EditText(requireContext());
         input.setInputType(InputType.TYPE_CLASS_TEXT);
-        input.setText(item.getName());
+        input.setText(item.name);
 
         new AlertDialog.Builder(requireContext())
                 .setTitle("Rename")
                 .setView(input)
                 .setPositiveButton("Rename", (d, w) -> {
                     String newName = input.getText().toString().trim();
-                    FileMutator.Result r = FileMutator.rename(item.getPath(), newName);
+                    FileMutator.Result r = FileMutator.rename(item.path, newName);
                     Toast.makeText(getContext(), r.message, Toast.LENGTH_SHORT).show();
                     if (r.ok) loadDirectory(currentPath);
                 })
@@ -195,11 +196,11 @@ public class FilesFragment extends Fragment {
     private void confirmDelete(FileItem item) {
         new AlertDialog.Builder(requireContext())
                 .setTitle("Delete?")
-                .setMessage(item.getName() + (item.isDirectory()
+                .setMessage(item.name + (item.directory
                         ? "\n\nFolder and all contents will be removed."
                         : ""))
                 .setPositiveButton("Delete", (d, w) -> {
-                    FileMutator.Result r = FileMutator.delete(item.getPath());
+                    FileMutator.Result r = FileMutator.delete(item.path);
                     Toast.makeText(getContext(), r.message, Toast.LENGTH_SHORT).show();
                     if (r.ok) {
                         NativeCache.invalidateStatsSnapshot(getContext());
@@ -212,8 +213,7 @@ public class FilesFragment extends Fragment {
 
     private void setupDrawer() {
         binding.btnOpenDrawer.setOnClickListener(v ->
-                binding.drawerLayout.openDrawer(GravityCompat.START)
-        );
+                binding.drawerLayout.openDrawer(GravityCompat.START));
 
         refreshThemeMenuTitle();
 
@@ -224,7 +224,6 @@ public class FilesFragment extends Fragment {
                 String label = ThemePrefs.cycle(requireContext());
                 Toast.makeText(getContext(), "Theme: " + label, Toast.LENGTH_SHORT).show();
                 refreshThemeMenuTitle();
-                // keep drawer open so user can cycle again
                 return true;
             }
 
@@ -244,7 +243,7 @@ public class FilesFragment extends Fragment {
             } else if (id == R.id.nav_refresh) {
                 loadDirectory(currentPath);
             } else if (id == R.id.nav_external) {
-                Toast.makeText(getContext(), "External / SD â€“ coming soon", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), "External / SD – coming soon", Toast.LENGTH_SHORT).show();
             }
 
             binding.drawerLayout.closeDrawer(GravityCompat.START);
@@ -263,18 +262,13 @@ public class FilesFragment extends Fragment {
 
     private void setupSearch() {
         binding.searchResultsHeader.setVisibility(View.GONE);
-
         binding.searchInput.setOnEditorActionListener((v, actionId, event) -> {
             boolean isSearch = actionId == EditorInfo.IME_ACTION_SEARCH
                     || (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER);
-
             if (isSearch) {
                 String query = binding.searchInput.getText() != null
-                        ? binding.searchInput.getText().toString().trim()
-                        : "";
-                if (!query.isEmpty()) {
-                    performSearch(query);
-                }
+                        ? binding.searchInput.getText().toString().trim() : "";
+                if (!query.isEmpty()) performSearch(query);
                 return true;
             }
             return false;
@@ -282,6 +276,7 @@ public class FilesFragment extends Fragment {
     }
 
     private void performSearch(String query) {
+        RouteLogger.step(requireContext(), ROUTE, "search", query);
         String dir = PathRegistry.moduleDir(getContext(), "search");
         if (dir.isEmpty()) {
             Toast.makeText(getContext(), "Storage not ready", Toast.LENGTH_SHORT).show();
@@ -289,14 +284,10 @@ public class FilesFragment extends Fragment {
         }
         String out = dir + "/results.json";
         PathCache.remember(SEARCH_JOB, out);
-
-        // Show the previous results instantly while the fresh scan builds.
         renderSearchFile(PathCache.previous(SEARCH_JOB), query, true);
-
         binding.searchResultsHeader.setVisibility(View.VISIBLE);
-        binding.searchResultsHeader.setText("Searchingâ€¦");
+        binding.searchResultsHeader.setText("Searching…");
         showEmpty(false);
-
         runSearch(query, out, true);
     }
 
@@ -304,8 +295,6 @@ public class FilesFragment extends Fragment {
         NativeEngine.searchFilesAsync(currentPath, query, out, rawJson -> {
             if (binding == null) return;
             if ("busy".equals(PathCache.reason(rawJson))) {
-                // A scan is still running â€” retry once shortly; the user is
-                // usually still typing, so this resolves on its own.
                 if (mayRetry) {
                     binding.searchResultsHeader.postDelayed(() -> {
                         if (binding == null) return;
@@ -318,6 +307,7 @@ public class FilesFragment extends Fragment {
             }
             String content = PathCache.readFile(PathCache.envelopePath(rawJson));
             if (content == null) {
+                RouteLogger.error(requireContext(), ROUTE, "search_failed");
                 Toast.makeText(getContext(), "Search failed", Toast.LENGTH_SHORT).show();
                 return;
             }
@@ -340,7 +330,6 @@ public class FilesFragment extends Fragment {
     private void renderSearchContent(String content, String query) {
         List<FileItem> items = parseSearchResults(content);
         showingSearchResults = true;
-
         if (items.isEmpty()) {
             binding.searchResultsHeader.setText("No results for \"" + query + "\"");
             showEmpty(true);
@@ -355,61 +344,48 @@ public class FilesFragment extends Fragment {
         List<FileItem> result = new ArrayList<>();
         try {
             JSONObject root = new JSONObject(rawJson);
-
             JSONArray exact = root.optJSONArray("exact_matches");
             if (exact != null) {
                 for (int i = 0; i < exact.length(); i++) {
                     JSONObject o = exact.getJSONObject(i);
                     boolean isDir = o.optBoolean("is_dir", false);
                     result.add(new FileItem(
-                            o.getString("name"),
-                            o.getString("path"),
-                            isDir ? "Folder Â· exact match" : "File Â· exact match",
-                            isDir,
-                            0
-                    ));
+                            o.getString("name"), o.getString("path"),
+                            isDir ? "Folder · exact" : "File · exact", isDir, 0));
                 }
             }
-
             JSONArray related = root.optJSONArray("related_matches");
             if (related != null) {
                 for (int i = 0; i < related.length(); i++) {
                     JSONObject o = related.getJSONObject(i);
                     boolean isDir = o.optBoolean("is_dir", false);
                     result.add(new FileItem(
-                            o.getString("name"),
-                            o.getString("path"),
-                            isDir ? "Folder Â· related" : "File Â· related",
-                            isDir,
-                            0
-                    ));
+                            o.getString("name"), o.getString("path"),
+                            isDir ? "Folder · related" : "File · related", isDir, 0));
                 }
             }
         } catch (JSONException e) {
-            e.printStackTrace();
+            RouteLogger.error(requireContext(), ROUTE, "parse_search " + e.getMessage());
             Toast.makeText(getContext(), "Failed to parse search results", Toast.LENGTH_SHORT).show();
         }
         return result;
     }
 
     private void loadDirectory(String path) {
+        RouteLogger.step(requireContext(), ROUTE, "loadDirectory", path);
         currentPath = path;
         BrowseSession.filesCurrentPath = path;
         binding.currentPath.setText(path);
         showingSearchResults = false;
         binding.searchResultsHeader.setVisibility(View.GONE);
-
         showEmpty(false);
         binding.fileList.setVisibility(View.VISIBLE);
 
         NativeEngine.processActionAsync(ACTION_LIST_FILES, path, rawJson -> {
             if (binding == null) return;
-
             List<FileItem> items = parseSimpleFileList(rawJson, path);
-
-            if (items.isEmpty()) {
-                showEmpty(true);
-            } else {
+            if (items.isEmpty()) showEmpty(true);
+            else {
                 showEmpty(false);
                 adapter.submitList(items);
             }
@@ -424,23 +400,16 @@ public class FilesFragment extends Fragment {
                 Toast.makeText(getContext(), "Error: " + root.getString("error"), Toast.LENGTH_SHORT).show();
                 return result;
             }
-
             JSONArray files = root.optJSONArray("files");
             if (files == null) return result;
-
             for (int i = 0; i < files.length(); i++) {
                 String name = files.getString(i);
-                String fullPath = parentPath.endsWith("/")
-                        ? parentPath + name
-                        : parentPath + "/" + name;
-
+                String fullPath = parentPath.endsWith("/") ? parentPath + name : parentPath + "/" + name;
                 boolean isDir = !name.contains(".");
-                String details = isDir ? "Folder" : "File";
-
-                result.add(new FileItem(name, fullPath, details, isDir, 0));
+                result.add(new FileItem(name, fullPath, isDir ? "Folder" : "File", isDir, 0));
             }
         } catch (JSONException e) {
-            e.printStackTrace();
+            RouteLogger.error(requireContext(), ROUTE, "parse_list " + e.getMessage());
             Toast.makeText(getContext(), "Failed to parse file list", Toast.LENGTH_SHORT).show();
         }
         return result;
@@ -463,4 +432,3 @@ public class FilesFragment extends Fragment {
         binding = null;
     }
 }
-
