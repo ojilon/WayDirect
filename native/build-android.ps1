@@ -4,20 +4,17 @@
 # Builds libWayDirect_engine.so for Android arm64-v8a using:
 #   * odin build          — for all *.odin sources (Odin packages + C ABI exports)
 #   * NDK clang (clang++) — for remaining C/C++ FFI implementation files
-#   * llvm-ar             — to archive objects into a shared library
 #
 # Usage (from repo root):
 #   powershell -File native/build-android.ps1
 #
-# Environment (set these before running):
-#   $env:ODIN_ANDROID_NDK   — Android NDK root (default: D:\Dev\AndroidCLI\sdk\ndk\30.0.16248370)
-#   $env:ODIN_ANDROID_SDK   — Android SDK root (default: D:\Dev\AndroidCLI\sdk)
+# Configuration is read from native/build-android.cfg (gitignored, local only).
+# Fallback order: cfg file → environment variable → hardcoded default.
 #
 # Output:
-#   native/build/arm64-v8a/libWayDirect_engine.so
+#   native/build/arm64-v8a/libwaydirect_engine.so
 #
 # =============================================================================
-
 
 param(
     [string]$Abi = "arm64-v8a",
@@ -26,6 +23,46 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# --------------------------------------------------
+# 0. Read local config file (gitignored)
+# --------------------------------------------------
+
+function Get-CfgValue {
+    param([string]$Key, [string]$Default = $null)
+    $CfgFile = Join-Path $PSScriptRoot "build-android.cfg"
+    if (Test-Path $CfgFile) {
+        $Content = Get-Content $CfgFile
+        foreach ($Line in $Content) {
+            $Trimmed = $Line.Trim()
+            if ($Trimmed -eq "" -or $Trimmed.StartsWith("#")) { continue }
+            if ($Trimmed -match "^([^=]+)=(.*)$") {
+                $Name = $Matches[1].Trim()
+                $Value = $Matches[2].Trim()
+                if ($Name -eq $Key) {
+                    return $Value
+                }
+            }
+        }
+    }
+    return $Default
+}
+
+# Resolve paths (cfg → env → hardcoded default)
+$CfgOdinDir = Get-CfgValue -Key "odin_dir"
+$CfgNdkDir  = Get-CfgValue -Key "ndk_dir"
+$CfgSdkDir  = Get-CfgValue -Key "sdk_dir"
+$CfgAbi     = Get-CfgValue -Key "abi"
+$CfgMinApi  = Get-CfgValue -Key "min_api"
+
+# Override params with cfg values if provided on command line was not explicitly set
+# (PowerShell params already have defaults; cfg fills gaps only)
+if ($PSBoundParameters.ContainsKey("Abi") -eq $false -and $CfgAbi) {
+    $Abi = $CfgAbi
+}
+if ($PSBoundParameters.ContainsKey("MinApi") -eq $false -and $CfgMinApi) {
+    $MinApi = [int]$CfgMinApi
+}
 
 # --------------------------------------------------
 # 1. Tools
@@ -40,20 +77,30 @@ if (-not (Test-Path $OdinDir)) {
     throw "Odin directory not found: $OdinDir"
 }
 
-$Ndk = $env:ODIN_ANDROID_NDK
-
+$Ndk = $CfgNdkDir
+if (-not $Ndk) {
+    $Ndk = $env:ODIN_ANDROID_NDK
+}
 if (-not $Ndk) {
     $Ndk = "D:\Dev\AndroidCLI\sdk\ndk\30.0.16248370"
 }
 
 if (-not (Test-Path $Ndk)) {
-    throw "Android NDK not found: $Ndk"
+    throw "Android NDK not found: $Ndk. Set ndk_dir in native/build-android.cfg or ODIN_ANDROID_NDK env var."
 }
 
-$Toolchain = "$Ndk/toolchains/llvm/prebuilt/windows-x86_64/bin"
+$Sdk = $CfgSdkDir
+if (-not $Sdk) {
+    $Sdk = $env:ODIN_ANDROID_SDK
+}
+if (-not $Sdk) {
+    $Sdk = "D:\Dev\AndroidCLI\sdk"
+}
 
-$Clang = "$Toolchain/clang.exe"
-$ClangPP = "$Toolchain/clang++.exe"
+$Toolchain = Join-Path $Ndk "toolchains\llvm\prebuilt\windows-x86_64\bin"
+
+$Clang = Join-Path $Toolchain "clang.exe"
+$ClangPP = Join-Path $Toolchain "clang++.exe"
 
 foreach ($Tool in @($Clang, $ClangPP)) {
     if (-not (Test-Path $Tool)) {
@@ -66,7 +113,7 @@ foreach ($Tool in @($Clang, $ClangPP)) {
 # --------------------------------------------------
 
 $Root = (Get-Location).Path
-$Native = "$Root/native"
+$Native = Join-Path $Root "native"
 
 $ObjDir = Join-Path $BuildDir "obj"
 $OutDir = Join-Path $BuildDir $Abi
@@ -140,7 +187,7 @@ $Sources = @(
     "file_system_bridge/src/android_fs.c"
 )
 
-$Sysroot = "$Ndk/toolchains/llvm/prebuilt/windows-x86_64/sysroot"
+$Sysroot = Join-Path $Ndk "toolchains\llvm\prebuilt\windows-x86_64\sysroot"
 
 # Include paths for remaining native headers (after .cpp/.hpp purge)
 $IncPaths = @(

@@ -30,6 +30,9 @@ keystore.properties
 *.jks
 *.keystore
 
+# Local build configuration (gitignored, per-machine)
+native/build-android.cfg
+
 build/
 
 #build-test files
