@@ -16,7 +16,7 @@ import com.waydirect.bridge.AppDirs;
 import com.waydirect.bridge.NativeCache;
 import com.waydirect.bridge.NativeEngine;
 import com.waydirect.bridge.PathCache;
-import com.waydirect.bridge.Stats;
+import com.waydirect.bridge.RouteLogger;
 import com.waydirect.core.GlassBlur;
 import com.waydirect.core.MainActivity;
 import com.waydirect.core.ThemePrefs;
@@ -30,7 +30,13 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Home — recent files by day + shortcuts.
+ * Route logs: logs/home/YYYY-MM-DD.log
+ */
 public class HomeFragment extends Fragment implements DaySectionAdapter.Listener {
+
+    private static final String ROUTE = "home";
 
     private FragmentHomeBinding binding;
     private DaySectionAdapter daysAdapter;
@@ -88,16 +94,12 @@ public class HomeFragment extends Fragment implements DaySectionAdapter.Listener
     }
 
     private void setupUI() {
-        
-        // --- day grid ---
         daysAdapter = new DaySectionAdapter(this);
         binding.homeDaysList.setLayoutManager(new LinearLayoutManager(requireContext()));
         binding.homeDaysList.setAdapter(daysAdapter);
-        binding.homeDaysStatus.setText("Indexing filesâ€¦");
-
+        binding.homeDaysStatus.setText("Indexing files…");
         loadFilesByDay();
 
-        // shortcuts (unchanged)
         binding.actionFiles.setOnClickListener(v ->
                 ((MainActivity) requireActivity()).navigateTo(R.id.nav_files));
         binding.actionTransfer.setOnClickListener(v ->
@@ -105,25 +107,21 @@ public class HomeFragment extends Fragment implements DaySectionAdapter.Listener
         binding.actionStorage.setOnClickListener(v ->
                 ((MainActivity) requireActivity()).navigateTo(R.id.nav_storage));
         binding.actionTerminal.setOnClickListener(v ->
-                Toast.makeText(getContext(), "Terminal â€“ coming soon", Toast.LENGTH_SHORT).show());
+                Toast.makeText(getContext(), "Terminal – coming soon", Toast.LENGTH_SHORT).show());
 
         refreshRecentTransfersHint();
     }
 
-    /**
-     * 1) Build / refresh index (paths + size + mtime) into cache/index/files.json
-     * 2) Group that file by day into cache/index/files_by_day.json
-     * 3) Read the by-day JSON and show it
-     */
     private void loadFilesByDay() {
+        RouteLogger.step(requireContext(), ROUTE, "loadFilesByDay", "start");
         String root = AppDirs.externalRoot().getPath();
 
         NativeEngine.buildIndexAsync(requireContext(), root, buildRaw -> {
             if (binding == null || getActivity() == null) return;
+            RouteLogger.step(requireContext(), ROUTE, "index_built", truncate(buildRaw, 120));
 
             NativeEngine.groupIndexByDayAsync(requireContext(), 14, 50, groupRaw -> {
                 if (binding == null || getActivity() == null) return;
-
                 String path = PathCache.envelopePath(groupRaw);
                 String json = PathCache.readFile(path);
                 if (json == null) {
@@ -140,12 +138,15 @@ public class HomeFragment extends Fragment implements DaySectionAdapter.Listener
         if (json == null || json.isEmpty()) {
             binding.homeDaysStatus.setText("No day data yet");
             daysAdapter.submit(new ArrayList<>());
+            RouteLogger.warn(requireContext(), ROUTE, "no_day_data");
             return;
         }
         try {
             JSONObject root = new JSONObject(json);
             if (root.has("error")) {
-                binding.homeDaysStatus.setText("Error: " + root.optString("error"));
+                String err = root.optString("error");
+                binding.homeDaysStatus.setText("Error: " + err);
+                RouteLogger.error(requireContext(), ROUTE, err);
                 return;
             }
             JSONArray days = root.optJSONArray("days");
@@ -173,14 +174,15 @@ public class HomeFragment extends Fragment implements DaySectionAdapter.Listener
             daysAdapter.submit(list);
             binding.homeDaysStatus.setText(
                     list.isEmpty() ? "No recent files" : (list.size() + " day(s)"));
+            RouteLogger.step(requireContext(), ROUTE, "days_ok", "count=" + list.size());
         } catch (Exception e) {
             binding.homeDaysStatus.setText("Failed to parse day list");
+            RouteLogger.error(requireContext(), ROUTE, "parse " + e.getMessage());
         }
     }
 
     @Override
     public void onSeeMore(DaySection section) {
-        // v1: toast; later open a full list fragment with section.day
         Toast.makeText(getContext(),
                 "See more: " + section.day + " (" + section.files.size() + " files)",
                 Toast.LENGTH_SHORT).show();
@@ -191,13 +193,6 @@ public class HomeFragment extends Fragment implements DaySectionAdapter.Listener
         FileOpenHelper.open(requireContext(), file.path);
     }
 
-    private String formatSize(long bytes) {
-        if (bytes < 1024) return bytes + " B";
-        if (bytes < 1024 * 1024) return String.format("%.1f KB", bytes / 1024.0);
-        if (bytes < 1024L * 1024 * 1024) return String.format("%.1f MB", bytes / (1024.0 * 1024));
-        return String.format("%.1f GB", bytes / (1024.0 * 1024 * 1024));
-    }
-
     private void refreshRecentTransfersHint() {
         if (binding == null) return;
         List<RecentTransfersStore.Entry> list = RecentTransfersStore.load(requireContext());
@@ -206,9 +201,14 @@ public class HomeFragment extends Fragment implements DaySectionAdapter.Listener
         } else {
             RecentTransfersStore.Entry e = list.get(0);
             binding.recentTransfersEmpty.setText(
-                    (e.download ? "â†“ " : "â†‘ ") + e.name + " Â· and "
+                    (e.download ? "↓ " : "↑ ") + e.name + " · and "
                             + Math.max(0, list.size() - 1) + " more");
         }
+    }
+
+    private static String truncate(String s, int max) {
+        if (s == null) return "null";
+        return s.length() <= max ? s : s.substring(0, max) + "…";
     }
 
     @Override
