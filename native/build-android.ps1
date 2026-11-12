@@ -228,6 +228,8 @@ $JniLibsDir = Join-Path (Resolve-Path "app/src/main") "jniLibs/$Abi"
 if (-not (Test-Path $JniLibsDir)) {
     New-Item -ItemType Directory -Force -Path $JniLibsDir | Out-Null
 }
+# Remove any stale variants (e.g. old libWayDirect_engine.so casing)
+Get-ChildItem -Path $JniLibsDir -Filter "lib*engine.so" -ErrorAction SilentlyContinue | Remove-Item -Force
 $DestSo = Join-Path $JniLibsDir "libwaydirect_engine.so"
 Copy-Item -Path $Output -Destination $DestSo -Force
 Write-Host "Copied .so to: $DestSo"
