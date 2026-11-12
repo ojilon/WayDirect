@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 
-<!-- Flat list row (D1): small corners, no stroke â€” rows separate by
+<!-- Flat list row (D1): small corners, no stroke — rows separate by
      spacing + surface contrast instead of reading as chunky buttons. -->
 <com.google.android.material.card.MaterialCardView
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:minHeight="@dimen/list_item_height"
     android:layout_marginStart="@dimen/spacing_sm"
     android:layout_marginEnd="@dimen/spacing_sm"
     android:layout_marginTop="2dp"
@@ -75,4 +76,3 @@
     </LinearLayout>
 
 </com.google.android.material.card.MaterialCardView>
-
