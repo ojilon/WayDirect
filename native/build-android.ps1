@@ -31,8 +31,13 @@ $ErrorActionPreference = "Stop"
 # 1. Tools
 # --------------------------------------------------
 
-if (-not (Get-Command odin -ErrorAction SilentlyContinue)) {
+$OdinCmd = Get-Command odin -ErrorAction SilentlyContinue
+if (-not $OdinCmd) {
     throw "Odin compiler not found. Add odin to PATH."
+}
+$OdinDir = Split-Path $OdinCmd.Source -Parent
+if (-not (Test-Path $OdinDir)) {
+    throw "Odin directory not found: $OdinDir"
 }
 
 $Ndk = $env:ODIN_ANDROID_NDK
@@ -82,13 +87,26 @@ Remove-Item "$ObjDir/*.o" -Force -ErrorAction SilentlyContinue
 
 Write-Host "`n[1/3] Building Odin..."
 
-odin build "$Native/jni" `
-    -build-mode:obj `
-    -target:linux_arm64 `
-    -subtarget:android `
-    -reloc-mode:pic `
-    -no-entry-point `
-    "-out:$ObjDir/waydirect_engine"
+# odin.exe must run from its own directory (LLVM loads relative resources).
+Push-Location $OdinDir
+try {
+    $OdinArgs = @(
+        "build",
+        "$Native/jni",
+        "-build-mode:obj",
+        "-target:linux_arm64",
+        "-subtarget:android",
+        "-reloc-mode:pic",
+        "-no-entry-point",
+        "-out:$ObjDir/waydirect_engine"
+    )
+    $OdinCmdLine = $OdinArgs -join ' '
+    Write-Host "  odin $OdinCmdLine"
+    cmd /c "odin $OdinCmdLine" 2>&1
+}
+finally {
+    Pop-Location
+}
 
 if ($LASTEXITCODE -ne 0) {
     throw "Odin compilation failed."
