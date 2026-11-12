@@ -143,7 +143,7 @@ $Sources = @(
     "file_system_bridge/src/android_fs.c"
 )
 
-$Sysroot = "$Ndk/sysroot"
+$Sysroot = "$Ndk/toolchains/llvm/prebuilt/windows-x86_64/sysroot"
 
 # Include paths for remaining native headers (after .cpp/.hpp purge)
 $IncPaths = @(
@@ -158,7 +158,6 @@ $Flags = @(
     "-target", "aarch64-linux-android$MinApi"
     "--sysroot=$Sysroot"
     "-DANDROID"
-    "-D__ANDROID_API__=$MinApi"
     "-fPIC"
     "-O2"
     "-Wall"
