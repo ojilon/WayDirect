@@ -76,7 +76,7 @@ New-Item -ItemType Directory -Force -Path $ObjDir, $OutDir | Out-Null
 $ObjDir = (Resolve-Path $ObjDir).Path
 $OutDir = (Resolve-Path $OutDir).Path
 
-$Output = Join-Path $OutDir "libWayDirect_engine.so"
+$Output = Join-Path $OutDir "libwaydirect_engine.so"
 
 # Clean previous objects
 Remove-Item "$ObjDir/*.o" -Force -ErrorAction SilentlyContinue
@@ -228,7 +228,7 @@ $JniLibsDir = Join-Path (Resolve-Path "app/src/main") "jniLibs/$Abi"
 if (-not (Test-Path $JniLibsDir)) {
     New-Item -ItemType Directory -Force -Path $JniLibsDir | Out-Null
 }
-$DestSo = Join-Path $JniLibsDir "libWayDirect_engine.so"
+$DestSo = Join-Path $JniLibsDir "libwaydirect_engine.so"
 Copy-Item -Path $Output -Destination $DestSo -Force
 Write-Host "Copied .so to: $DestSo"
 
