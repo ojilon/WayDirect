@@ -109,21 +109,11 @@ if ($OdinObjects.Count -eq 0) {
 Write-Host "`n[2/3] Building legacy C/C++..."
 
 $Sources = @(
-    "core/src/json_util.cpp"
-    "core/src/paths.cpp"
-    "core/src/logging.cpp"
-    "core/src/text.cpp"
-    "storage/src/analyse_storage_space.cpp"
     "storage/src/dir_walk_android.c"
-    "storage/src/extension_map.cpp"
     "storage/src/index_c.c"
-    "storage/src/list_files.cpp"
-    "storage/src/safety.cpp"
-    "storage/src/stats_db.cpp"
     "storage/src/stats_json.cpp"
     "storage/src/storage_cache.cpp"
     "storage/src/storage_placeholder.cpp"
-    "storage/src/walker.cpp"
     "documents/src/document_engine.cpp"
     "documents/src/documents_placeholder.cpp"
     "documents/src/check_if_directory.c"
@@ -132,7 +122,6 @@ $Sources = @(
     "transfer/src/transfer_placeholder.cpp"
     "transfer/src/transfer_shim.c"
     "media/src/media_placeholder.cpp"
-    "preview/src/preview.cpp"
     "file_system_bridge/src/android_fs.c"
 )
 
