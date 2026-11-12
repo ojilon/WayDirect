@@ -211,6 +211,7 @@ $Objects = @($OdinObjects.FullName) + $CppObjects
     "--sysroot=$Sysroot" `
     -o $Output `
     $Objects `
+    -static-libstdc++ `
     -llog `
     -landroid `
     -lEGL `
