@@ -220,8 +220,21 @@ if ($LASTEXITCODE -ne 0) {
     throw "Shared library linking failed."
 }
 
+# --------------------------------------------------
+# 6. Copy .so to Gradle jniLibs (for APK packaging)
+# --------------------------------------------------
+
+$JniLibsDir = Join-Path (Resolve-Path "app/src/main") "jniLibs/$Abi"
+if (-not (Test-Path $JniLibsDir)) {
+    New-Item -ItemType Directory -Force -Path $JniLibsDir | Out-Null
+}
+$DestSo = Join-Path $JniLibsDir "libWayDirect_engine.so"
+Copy-Item -Path $Output -Destination $DestSo -Force
+Write-Host "Copied .so to: $DestSo"
+
 Write-Host "`n=================================="
 Write-Host "Build successful"
 Write-Host "ABI:    $Abi"
 Write-Host "Output: $Output"
+Write-Host "Copied to: $DestSo"
 Write-Host "=================================="
