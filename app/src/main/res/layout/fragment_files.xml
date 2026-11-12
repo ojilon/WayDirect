@@ -81,7 +81,7 @@
                 android:layout_marginStart="@dimen/spacing_sm"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_action_up"
-                android:contentDescription="@string/btn_files_up_desc"
+                android:contentDescription="Up"
                 app:tint="@color/waydirect_text_primary" />
         </LinearLayout>
 
