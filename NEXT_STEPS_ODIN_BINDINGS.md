@@ -1,8 +1,9 @@
 # Next Steps — Odin Android Bindings for WayDirect
 
 **Branch:** `experiment/use_official_odin_android_bindings`  
-**Status:** Native build works (`libWayDirect_engine.so` builds and copies to `jniLibs`)  
-**Next:** Port remaining C++ FFI → pure Odin, add `odin bundle android` packaging, then test on device via adb.
+**Status:** Native build works AND app tested successfully on device via adb  
+**Done:** App builds, installs, launches, and Odin JNI layer works end-to-end  
+**Next:** Port remaining C++ FFI → pure Odin, add `odin bundle android` packaging
 
 ---
 
@@ -161,6 +162,38 @@ adb uninstall com.waydirect
 | UnsatisfiedLinkError | Confirm `libWayDirect_engine.so` is in `app/src/main/jniLibs/arm64-v8a/` and matches device ABI |
 
 ---
+
+## Device Test Results (completed)
+
+**Device:** Transsion phone, arm64-v8a, USB debugging enabled  
+**APK:** `app/build/outputs/apk/debug/app-debug.apk`  
+**Package:** `com.waydirect.debug`  
+**Activity:** `com.waydirect.core.MainActivity`
+
+**Test commands:**
+```powershell
+pwsh native/build-android.ps1
+./gradlew :app:clean :app:assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb shell am start -n com.waydirect.debug/com.waydirect.core.MainActivity
+adb logcat -d -s WayDirectNative WayDirectBridge WayDirectEngine
+```
+
+**Verified log output:**
+```
+D WayDirectBridge: lease acquired: /data/user/0/com.waydirect.debug/files/WayDirect/waydirect/cache/index/files.json by index
+I WayDirectNative: initAppPaths: {"status":"paths_set","manifest":"...","all_ready":true,...}
+D WayDirectBridge: lease released: ...
+```
+
+The native Odin JNI layer loads and executes correctly:
+- `libwaydirect_engine.so` loads via `System.loadLibrary("waydirect_engine")`
+- `JNI_OnLoad` sets the JavaVM for `android.jni_env()`
+- `route_action(ACTION_INIT_APP_PATHS, ...)` calls Odin's `dispatch_action` → `init_app_paths_internal`
+- Returns proper JSON: `{"status":"paths_set","all_ready":true,...}`
+- Bridge lease system works for index files
+
+**No crashes** — AndroidRuntime clean.
 
 ## 4. Remaining work after device test
 
