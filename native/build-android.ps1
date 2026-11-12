@@ -129,6 +129,7 @@ Write-Host "`n[2/3] Building legacy C/C++..."
 $Sources = @(
     "storage/src/dir_walk_android.c"
     "storage/src/index_c.c"
+    "storage/modules/search/src/collect_data.c"
     "storage/src/storage_placeholder.cpp"
     "documents/src/documents_placeholder.cpp"
     "documents/src/check_if_directory.c"
