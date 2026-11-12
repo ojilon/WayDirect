@@ -3,8 +3,11 @@ package com.waydirect.ui;
 import android.content.Context;
 
 /**
- * Chooses the right full-window viewer for a file path.
- * Used by FilesFragment (and later Storage / search results).
+ * Chooses the right viewer for a file path.
+ *
+ * Text-like → TextViewerActivity (native-capped read).
+ * Images / video → dedicated activities.
+ * Everything else → DocumentActivity foundation.
  */
 public final class FileOpenHelper {
 
@@ -35,11 +38,44 @@ public final class FileOpenHelper {
                 VideoActivity.open(context, path);
                 break;
 
+            // Plain / structured text — dedicated viewer
+            case "txt":
+            case "text":
+            case "log":
+            case "md":
+            case "markdown":
+            case "json":
+            case "html":
+            case "htm":
+            case "xml":
+            case "csv":
+            case "tsv":
+            case "yml":
+            case "yaml":
+            case "toml":
+            case "ini":
+            case "conf":
+            case "odin":
+            case "java":
+            case "c":
+            case "h":
+            case "cpp":
+            case "hpp":
+            case "kt":
+            case "py":
+            case "js":
+            case "ts":
+            case "css":
+            case "sh":
+            case "bat":
+            case "gradle":
+            case "properties":
+                TextViewerActivity.open(context, path);
+                break;
+
             default:
-                // Text, pdf, office, unknown â†’ document foundation
                 DocumentActivity.open(context, path);
                 break;
         }
     }
 }
-

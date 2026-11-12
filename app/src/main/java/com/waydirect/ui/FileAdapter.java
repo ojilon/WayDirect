@@ -18,9 +18,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-/**
- * Displays FileItem rows with compact sizing and simple type icons.
- */
+/** Displays FileItem rows — uses public fields on FileItem (no getters). */
 public class FileAdapter extends RecyclerView.Adapter<FileAdapter.ViewHolder> {
 
     public interface OnItemClickListener {
@@ -46,7 +44,6 @@ public class FileAdapter extends RecyclerView.Adapter<FileAdapter.ViewHolder> {
         this.selectionListener = listener;
     }
 
-    /** Selection mode shows checkboxes; row taps toggle instead of opening. */
     public void setSelectionMode(boolean on) {
         selectionMode = on;
         if (!on) selectedPaths.clear();
@@ -59,9 +56,7 @@ public class FileAdapter extends RecyclerView.Adapter<FileAdapter.ViewHolder> {
 
     public void toggleSelection(String path) {
         if (path == null) return;
-        if (!selectedPaths.remove(path)) {
-            selectedPaths.add(path);
-        }
+        if (!selectedPaths.remove(path)) selectedPaths.add(path);
         notifyDataSetChanged();
         if (selectionListener != null) selectionListener.onSelectionChanged(selectedPaths.size());
     }
@@ -72,9 +67,7 @@ public class FileAdapter extends RecyclerView.Adapter<FileAdapter.ViewHolder> {
 
     public void submitList(List<FileItem> newItems) {
         items.clear();
-        if (newItems != null) {
-            items.addAll(newItems);
-        }
+        if (newItems != null) items.addAll(newItems);
         notifyDataSetChanged();
     }
 
@@ -89,18 +82,15 @@ public class FileAdapter extends RecyclerView.Adapter<FileAdapter.ViewHolder> {
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         FileItem item = items.get(position);
-        holder.name.setText(item.getName());
-        holder.details.setText(item.getDetails());
+        holder.name.setText(item.name);
+        holder.details.setText(item.details);
         holder.icon.setImageResource(iconFor(item));
         holder.selectBox.setVisibility(selectionMode ? View.VISIBLE : View.GONE);
-        holder.selectBox.setChecked(selectedPaths.contains(item.getPath()));
+        holder.selectBox.setChecked(selectedPaths.contains(item.path));
 
         holder.itemView.setOnClickListener(v -> {
-            if (selectionMode) {
-                toggleSelection(item.getPath());
-            } else if (listener != null) {
-                listener.onItemClick(item);
-            }
+            if (selectionMode) toggleSelection(item.path);
+            else if (listener != null) listener.onItemClick(item);
         });
 
         holder.itemView.setOnLongClickListener(v -> {
@@ -110,15 +100,15 @@ public class FileAdapter extends RecyclerView.Adapter<FileAdapter.ViewHolder> {
     }
 
     private static int iconFor(FileItem item) {
-        if (item.isDirectory()) return R.drawable.ic_folder;
-        String name = item.getName().toLowerCase(Locale.US);
+        if (item.directory) return R.drawable.ic_folder;
+        String name = item.name.toLowerCase(Locale.US);
         int dot = name.lastIndexOf('.');
         String ext = dot >= 0 ? name.substring(dot + 1) : "";
         return switch (ext) {
             case "png", "jpg", "jpeg", "gif", "webp", "bmp", "heic" -> R.drawable.ic_file_image;
             case "mp4", "mkv", "avi", "mov", "webm", "3gp" -> R.drawable.ic_file_video;
             case "mp3", "wav", "flac", "aac", "ogg", "m4a" -> R.drawable.ic_file_audio;
-            case "pdf", "doc", "docx", "txt", "md", "rtf", "odt" -> R.drawable.ic_file_doc;
+            case "pdf", "doc", "docx", "txt", "md", "rtf", "odt", "json", "html", "htm", "xml", "csv" -> R.drawable.ic_file_doc;
             default -> R.drawable.ic_file;
         };
     }
@@ -143,4 +133,3 @@ public class FileAdapter extends RecyclerView.Adapter<FileAdapter.ViewHolder> {
         }
     }
 }
-

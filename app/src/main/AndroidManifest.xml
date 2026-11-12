@@ -29,6 +29,11 @@
             android:exported="false" />
 
         <activity
+            android:name=".ui.TextViewerActivity"
+            android:theme="@style/Theme.WayDirect"
+            android:exported="false" />
+
+        <activity
             android:name=".ui.ImageActivity"
             android:theme="@style/Theme.WayDirect"
             android:exported="false" />
