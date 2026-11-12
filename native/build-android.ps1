@@ -18,199 +18,199 @@
 #
 # =============================================================================
 
+
 param(
-    [string]$TargetAbi      = "arm64-v8a",
-    [string]$OdinTarget     = "linux_arm64",
-    [string]$OdinSubTarget  = "-subtarget:android",
-    [int]$MinApi            = 29,
-    [string]$BuildDir       = "native/build",
-    [switch]$Verbose
+    [string]$Abi = "arm64-v8a",
+    [int]$MinApi = 29,
+    [string]$BuildDir = "native/build"
 )
 
 $ErrorActionPreference = "Stop"
 
-# --- locate NDK ---------------------------------------------------------------
-if (-not $env:ODIN_ANDROID_NDK) {
-    $env:ODIN_ANDROID_NDK = "D:\Dev\AndroidCLI\sdk\ndk\30.0.16248370"
-    Write-Host "ODIN_ANDROID_NDK not set, using default: $($env:ODIN_ANDROID_NDK)"
-}
-$NdkRoot = $env:ODIN_ANDROID_NDK
-if (-not (Test-Path $NdkRoot)) {
-    throw "NDK not found at $NdkRoot. Set ODIN_ANDROID_NDK."
+# --------------------------------------------------
+# 1. Tools
+# --------------------------------------------------
+
+if (-not (Get-Command odin -ErrorAction SilentlyContinue)) {
+    throw "Odin compiler not found. Add odin to PATH."
 }
 
-# NDK clang++ for C/C++ compilation (windows-x86_64 host)
-$Clang = Join-Path $NdkRoot "toolchains\llvm\prebuilt\windows-x86_64\bin\clang++.exe"
-if (-not (Test-Path $Clang)) {
-    throw "clang++ not found at $Clang"
+$Ndk = $env:ODIN_ANDROID_NDK
+
+if (-not $Ndk) {
+    $Ndk = "D:\Dev\AndroidCLI\sdk\ndk\30.0.16248370"
 }
 
-# --- locate Odin compiler -----------------------------------------------------
-$Odin = Get-Command "odin" -ErrorAction SilentlyContinue
-if (-not $Odin) {
-    throw "odin not found on PATH. Install from https://odin-lang.org"
+if (-not (Test-Path $Ndk)) {
+    throw "Android NDK not found: $Ndk"
 }
-# odin.exe must run from its own directory (LLVM loads relative resources).
-$OdinDir = Split-Path $Odin.Source -Parent
-Write-Host "Odin compiler: $($Odin.Source)"
-Write-Host "Odin dir:      $OdinDir"
 
-# --- directories --------------------------------------------------------------
-$NativeRoot = Join-Path (Resolve-Path ".") "native"
-$OdinSrc    = Join-Path $NativeRoot "jni"           # entry package: waydirect_jni (imports waydirect_core transitively)
-$OutDir     = Join-Path $BuildDir $TargetAbi
-$ObjDir     = Join-Path $BuildDir "obj"
-$LibOut     = Join-Path $OutDir "libWayDirect_engine.so"
+$Toolchain = "$Ndk/toolchains/llvm/prebuilt/windows-x86_64/bin"
 
-if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir -Force | Out-Null }
-if (-not (Test-Path $ObjDir)) { New-Item -ItemType Directory -Path $ObjDir -Force | Out-Null }
+$Clang = "$Toolchain/clang.exe"
+$ClangPP = "$Toolchain/clang++.exe"
 
-# --- helper: run a command via cmd /c from a working directory ----------------
-function Run-Cmd($cmd, $workDir) {
-    Push-Location $workDir
-    try {
-        $full = "cmd /c `"$cmd`""
-        if ($Verbose) { Write-Host "  [cmd] $cmd" }
-        $out = & $full 2>&1
-        Write-Host $out
-    } finally {
-        Pop-Location
+foreach ($Tool in @($Clang, $ClangPP)) {
+    if (-not (Test-Path $Tool)) {
+        throw "Missing NDK compiler: $Tool"
     }
-    return $LASTEXITCODE
 }
 
-# --- step 1: build Odin sources into object files -----------------------------
-Write-Host "`n[1/4] Building Odin sources with odin build ..."
-$OdinPrefix = Join-Path $ObjDir "waydirect_engine"
+# --------------------------------------------------
+# 2. Directories
+# --------------------------------------------------
 
-# Clean stale Odin objects
-Get-ChildItem -Path $ObjDir -Filter "waydirect_engine-*.o" -ErrorAction SilentlyContinue | Remove-Item -Force
+$Root = (Get-Location).Path
+$Native = "$Root/native"
 
-$OdinArgs = @(
-    "build",
-    $OdinSrc,
-    "-build-mode:obj",
-    "-target:$OdinTarget",
-    "-reloc-mode:pic",
-    "-no-entry-point",
-    "-out:$OdinPrefix"
+$ObjDir = Join-Path $BuildDir "obj"
+$OutDir = Join-Path $BuildDir $Abi
+
+New-Item -ItemType Directory -Force -Path $ObjDir, $OutDir | Out-Null
+
+$ObjDir = (Resolve-Path $ObjDir).Path
+$OutDir = (Resolve-Path $OutDir).Path
+
+$Output = Join-Path $OutDir "libWayDirect_engine.so"
+
+# Clean previous objects
+Remove-Item "$ObjDir/*.o" -Force -ErrorAction SilentlyContinue
+
+# --------------------------------------------------
+# 3. Odin compilation
+# --------------------------------------------------
+
+Write-Host "`n[1/3] Building Odin..."
+
+odin build "$Native/jni" `
+    -build-mode:obj `
+    -target:linux_arm64 `
+    -subtarget:android `
+    -reloc-mode:pic `
+    -no-entry-point `
+    "-out:$ObjDir/waydirect_engine"
+
+if ($LASTEXITCODE -ne 0) {
+    throw "Odin compilation failed."
+}
+
+$OdinObjects = @(
+    Get-ChildItem $ObjDir -Filter "waydirect_engine*.o" -File
 )
-if ($OdinSubTarget) { $OdinArgs += $OdinSubTarget }
 
-$OdinCmdLine = $OdinArgs -join ' '
-if ($Verbose) { Write-Host "  Running: $($Odin.Source) $OdinCmdLine" }
-Push-Location $OdinDir
-try {
-    $OdinOutput = & (Join-Path $OdinDir "odin.exe") $OdinCmdLine 2>&1
-    Write-Host $OdinOutput
-} finally {
-    Pop-Location
+if ($OdinObjects.Count -eq 0) {
+    throw "Odin produced no object files."
 }
-if ($LASTEXITCODE -ne 0) { throw "Odin build failed" }
 
-# Collect Odin object files
-$OdinObjFiles = Get-ChildItem -Path $ObjDir -Filter "waydirect_engine-*.o" -ErrorAction SilentlyContinue
-if (-not $OdinObjFiles) {
-    $OdinObjFiles = Get-ChildItem -Path $ObjDir -Filter "waydirect_engine.o" -ErrorAction SilentlyContinue
-}
-if (-not $OdinObjFiles) {
-    throw "Odin produced no object files in $ObjDir"
-}
-Write-Host "Odin objects: $($OdinObjFiles.Count) files"
+# --------------------------------------------------
+# 4. Legacy C/C++ compilation
+# --------------------------------------------------
 
-# --- step 2: compile C/C++ FFI implementation files ---------------------------
-Write-Host "`n[2/4] Compiling C/C++ FFI sources with NDK clang++ ..."
+Write-Host "`n[2/3] Building legacy C/C++..."
 
-# C/C++ source files that implement the FFI behind Odin's foreign imports.
-# These are the files that still use C/C++ (not yet ported to pure Odin).
-$CppSources = @(
-    "core/src/json_util.cpp",
-    "core/src/paths.cpp",
-    "core/src/logging.cpp",
-    "core/src/text.cpp",
-    "storage/src/analyse_storage_space.cpp",
-    "storage/src/dir_walk_android.c",
-    "storage/src/extension_map.cpp",
-    "storage/src/index_c.c",
-    "storage/src/list_files.cpp",
-    "storage/src/safety.cpp",
-    "storage/src/stats_db.cpp",
-    "storage/src/stats_json.cpp",
-    "storage/src/storage_cache.cpp",
-    "storage/src/storage_placeholder.cpp",
-    "storage/src/walker.cpp",
-    "documents/src/document_engine.cpp",
-    "documents/src/documents_placeholder.cpp",
-    "documents/src/check_if_directory.c",
-    "documents/src/doc_filter_helper.c",
-    "transfer/src/transfer_engine.cpp",
-    "transfer/src/transfer_placeholder.cpp",
-    "transfer/src/transfer_shim.c",
-    "media/src/media_placeholder.cpp",
-    "preview/src/preview.cpp",
+$Sources = @(
+    "core/src/json_util.cpp"
+    "core/src/paths.cpp"
+    "core/src/logging.cpp"
+    "core/src/text.cpp"
+    "storage/src/analyse_storage_space.cpp"
+    "storage/src/dir_walk_android.c"
+    "storage/src/extension_map.cpp"
+    "storage/src/index_c.c"
+    "storage/src/list_files.cpp"
+    "storage/src/safety.cpp"
+    "storage/src/stats_db.cpp"
+    "storage/src/stats_json.cpp"
+    "storage/src/storage_cache.cpp"
+    "storage/src/storage_placeholder.cpp"
+    "storage/src/walker.cpp"
+    "documents/src/document_engine.cpp"
+    "documents/src/documents_placeholder.cpp"
+    "documents/src/check_if_directory.c"
+    "documents/src/doc_filter_helper.c"
+    "transfer/src/transfer_engine.cpp"
+    "transfer/src/transfer_placeholder.cpp"
+    "transfer/src/transfer_shim.c"
+    "media/src/media_placeholder.cpp"
+    "preview/src/preview.cpp"
     "file_system_bridge/src/android_fs.c"
 )
 
-$ClangFlags = @(
-    "-target", "aarch64-linux-android$MinApi",
-    "-DANDROID", "-D__ANDROID_API__=$MinApi",
-    "-fPIC", "-O2", "-Wall", "-Wextra",
-    "-I", (Join-Path $NdkRoot "sysroot\usr\include\aarch64-linux-android"),
-    "-I", (Join-Path $NdkRoot "sysroot\usr\include"),
-    "--sysroot", (Join-Path $NdkRoot "sysroot")
+$Sysroot = "$Ndk/sysroot"
+
+$Flags = @(
+    "-target", "aarch64-linux-android$MinApi"
+    "--sysroot=$Sysroot"
+    "-DANDROID"
+    "-D__ANDROID_API__=$MinApi"
+    "-fPIC"
+    "-O2"
+    "-Wall"
+    "-Wextra"
+    "-I$Sysroot/usr/include"
+    "-I$Sysroot/usr/include/aarch64-linux-android"
 )
 
-$CppObjFiles = @()
-foreach ($src in $CppSources) {
-    $srcPath = Join-Path $NativeRoot $src
-    if (-not (Test-Path $srcPath)) {
-        Write-Warning "Skipping missing source: $src"
+$CppObjects = @()
+
+foreach ($Source in $Sources) {
+
+    $Input = Join-Path $Native $Source
+
+    if (-not (Test-Path $Input)) {
+        Write-Warning "Skipping missing source: $Source"
         continue
     }
-    $baseName = [System.IO.Path]::GetFileNameWithoutExtension($src)
-    $objFile = Join-Path $ObjDir ($baseName + ".o")
-    $CppObjFiles += $objFile
 
-    $CmdArgs = @($Clang) + $ClangFlags + @("-c", $srcPath, "-o", $objFile)
-    $CmdLine = $CmdArgs -join ' '
+    # Preserve directory structure to avoid basename collisions.
+    $RelativePath = [IO.Path]::ChangeExtension($Source, ".o")
+    $Object = Join-Path $ObjDir $RelativePath
+    $ObjectDir = Split-Path $Object -Parent
 
-    if ($Verbose) { Write-Host "  clang++ $src -> $objFile" }
-    $CmdOutput = & "cmd" "/c`"$CmdLine`"" 2>&1
-    Write-Host $CmdOutput
-    if ($LASTEXITCODE -ne 0) { throw "clang++ failed for $src" }
+    New-Item -ItemType Directory -Force -Path $ObjectDir | Out-Null
+
+    $Compiler = if ($Source.EndsWith(".c")) {
+        $Clang
+    } else {
+        $ClangPP
+    }
+
+    Write-Host "  $Source"
+
+    & $Compiler @Flags -c $Input -o $Object
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Compilation failed: $Source"
+    }
+
+    $CppObjects += $Object
 }
-Write-Host "C/C++ objects: $($CppObjFiles.Count) files"
 
-# --- step 3: link into shared library -----------------------------------------
-Write-Host "`n[3/4] Linking libWayDirect_engine.so ..."
+# --------------------------------------------------
+# 5. Link shared library
+# --------------------------------------------------
 
-# Remove old output
-if (Test-Path $LibOut) { Remove-Item -Path $LibOut -Force }
+Write-Host "`n[3/3] Linking shared library..."
 
-$AllObjs = @()
-foreach ($o in $OdinObjFiles) { $AllObjs += $o.FullName }
-foreach ($o in $CppObjFiles) { $AllObjs += $o }
+$Objects = @($OdinObjects.FullName) + $CppObjects
 
-$LinkArgs = @(
-    $Clang,
-    "-shared",
-    "-target", "aarch64-linux-android$MinApi",
-    "--sysroot", (Join-Path $NdkRoot "sysroot"),
-    "-o", $LibOut
-) + $AllObjs + @(
-    "-llog", "-landroid", "-lEGL", "-lGLESv2"
-)
+& $ClangPP `
+    -shared `
+    -target "aarch64-linux-android$MinApi" `
+    "--sysroot=$Sysroot" `
+    -o $Output `
+    $Objects `
+    -llog `
+    -landroid `
+    -lEGL `
+    -lGLESv2
 
-$LinkLine = $LinkArgs -join ' '
-if ($Verbose) { Write-Host "  Linking $($AllObjs.Count) objects into $LibOut" }
-$LinkOutput = & "cmd" "/c`"$LinkLine`"" 2>&1
-Write-Host $LinkOutput
-if ($LASTEXITCODE -ne 0) { throw "Link failed" }
+if ($LASTEXITCODE -ne 0) {
+    throw "Shared library linking failed."
+}
 
-Write-Host "Created: $LibOut"
-
-# --- step 4: summary ----------------------------------------------------------
-Write-Host "`n[4/4] Build complete."
-Write-Host "  Output: $LibOut"
-Write-Host "  To package: copy this .so to app/src/main/jniLibs/arm64-v8a/ and run ./gradlew assembleDebug"
-Write-Host "  Or use: odin bundle android app -minimum-os-version:$MinApi -out:WayDirect.apk"
+Write-Host "`n=================================="
+Write-Host "Build successful"
+Write-Host "ABI:    $Abi"
+Write-Host "Output: $Output"
+Write-Host "=================================="
