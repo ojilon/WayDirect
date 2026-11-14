@@ -1,27 +1,27 @@
 package com.waydirect.ui;
 
 import android.os.Bundle;
-import android.view.LayoutInflater;
+import android.view.LayoutInflater; // XML → View tree
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.core.view.GravityCompat;
+import androidx.core.view.GravityCompat; // END drawer for appearance sidebar
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 
 import com.waydirect.R;
-import com.waydirect.bridge.AppDirs;
-import com.waydirect.bridge.NativeCache;
-import com.waydirect.bridge.NativeEngine;
-import com.waydirect.bridge.PathCache;
-import com.waydirect.bridge.RouteLogger;
+import com.waydirect.bridge.AppDirs;       // external storage root for index
+import com.waydirect.bridge.NativeCache;   // fallback path for day JSON
+import com.waydirect.bridge.NativeEngine;  // buildIndexAsync + groupIndexByDayAsync
+import com.waydirect.bridge.PathCache;     // envelope path + readFile
+import com.waydirect.bridge.RouteLogger;   // logs/home/YYYY-MM-DD.log
 import com.waydirect.core.GlassBlur;
-import com.waydirect.core.MainActivity;
+import com.waydirect.core.MainActivity;    // navigateTo bottom-nav destinations
 import com.waydirect.core.ThemePrefs;
 import com.waydirect.core.UiChrome;
-import com.waydirect.databinding.FragmentHomeBinding;
+import com.waydirect.databinding.FragmentHomeBinding; // generated from fragment_home.xml
 import com.waydirect.transfer.RecentTransfersStore;
 
 import org.json.JSONArray;
@@ -31,8 +31,28 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Home — recent files by day + shortcuts.
- * Route logs: logs/home/YYYY-MM-DD.log
+ * Home tab — recent files grouped by day + shortcut chips to other tabs.
+ *
+ * <h3>Java ↔ XML</h3>
+ * Inflates {@code fragment_home.xml} via {@link FragmentHomeBinding}.
+ * List rows come from {@link DaySectionAdapter} (not {@link FileAdapter}).
+ *
+ * <h3>Native route (runtime)</h3>
+ * <pre>
+ * loadFilesByDay()
+ *   → NativeEngine.buildIndexAsync(root)
+ *   → NativeEngine.groupIndexByDayAsync(14 days, 50 files)
+ *   → PathCache reads JSON file path from the envelope
+ *   → applyDaysJson → DaySection list → daysAdapter.submit
+ * </pre>
+ * Callbacks run off the UI thread; we hop back with {@code runOnUiThread}.
+ * Always guard {@code if (binding == null) return;} after async work.
+ *
+ * <h3>User routes</h3>
+ * Shortcut buttons call {@link MainActivity#navigateTo(int)} with nav ids.
+ * File tap → {@link FileOpenHelper#open} (same as Files tab).
+ *
+ * Logs: {@code logs/home/YYYY-MM-DD.log} via {@link RouteLogger}.
  */
 public class HomeFragment extends Fragment implements DaySectionAdapter.Listener {
 
@@ -100,6 +120,7 @@ public class HomeFragment extends Fragment implements DaySectionAdapter.Listener
         binding.homeDaysStatus.setText("Indexing files…");
         loadFilesByDay();
 
+        // Shortcut chips → MainActivity swaps the visible Fragment (bottom nav)
         binding.actionFiles.setOnClickListener(v ->
                 ((MainActivity) requireActivity()).navigateTo(R.id.nav_files));
         binding.actionTransfer.setOnClickListener(v ->
@@ -112,6 +133,7 @@ public class HomeFragment extends Fragment implements DaySectionAdapter.Listener
         refreshRecentTransfersHint();
     }
 
+    /** Index then group-by-day; both steps are native and async. */
     private void loadFilesByDay() {
         RouteLogger.step(requireContext(), ROUTE, "loadFilesByDay", "start");
         String root = AppDirs.externalRoot().getPath();
@@ -133,6 +155,7 @@ public class HomeFragment extends Fragment implements DaySectionAdapter.Listener
         });
     }
 
+    /** JSON (from native file) → List<DaySection> → adapter. */
     private void applyDaysJson(String json) {
         if (binding == null) return;
         if (json == null || json.isEmpty()) {
@@ -220,6 +243,6 @@ public class HomeFragment extends Fragment implements DaySectionAdapter.Listener
     @Override
     public void onDestroyView() {
         super.onDestroyView();
-        binding = null;
+        binding = null; // drop ViewBinding so async callbacks cannot touch destroyed views
     }
 }
