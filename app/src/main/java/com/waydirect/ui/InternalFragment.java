@@ -13,19 +13,25 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import com.waydirect.bridge.NativeEngine;
 import com.waydirect.bridge.PathRegistry;
 import com.waydirect.databinding.FragmentInternalBinding;
+import com.waydirect.utils.FormatSizes;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
 
 /**
  * Read-only browser for the private app home (index, cache, logs, manifest).
  *
- * Listing is plain java.io (the app can read its own files directly); opening
- * a file goes through DocumentActivity, which renders via the C++ preview
- * module. No create / rename / delete here â€” navigation clamps at the root.
+ * <h3>Java ↔ XML</h3>
+ * {@code fragment_internal.xml} → {@link FragmentInternalBinding}.
+ * Rows: {@link FileAdapter} + {@code item_file.xml}.
+ *
+ * <h3>Data route</h3>
+ * Listing uses plain {@link File#listFiles()} under {@link PathRegistry#root} —
+ * no native list action. Opening a file goes to {@link DocumentActivity}.
+ *
+ * <p>{@link FileItem} uses public fields ({@code item.path}), not getters.
  */
 public class InternalFragment extends Fragment {
 
@@ -46,18 +52,18 @@ public class InternalFragment extends Fragment {
         adapter.setOnItemClickListener(new FileAdapter.OnItemClickListener() {
             @Override
             public void onItemClick(FileItem item) {
-                File f = new File(item.getPath());
+                File f = new File(item.path);
                 if (f.isDirectory()) {
                     current = f;
                     loadDirectory();
                 } else {
-                    DocumentActivity.open(requireContext(), item.getPath());
+                    DocumentActivity.open(requireContext(), item.path);
                 }
             }
 
             @Override
             public void onItemLongClick(FileItem item) {
-                Toast.makeText(getContext(), "Read-only â€” no actions here", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), "Read-only — no actions here", Toast.LENGTH_SHORT).show();
             }
         });
 
@@ -69,7 +75,6 @@ public class InternalFragment extends Fragment {
             }
         });
 
-        // Ensure the native tree (and paths.json) exists, then list it.
         NativeEngine.initAppPathsAsync(requireContext(), result -> {
             if (binding == null || getContext() == null) return;
             root = new File(PathRegistry.root(requireContext()));
@@ -104,19 +109,12 @@ public class InternalFragment extends Fragment {
             for (File c : children) {
                 boolean dir = c.isDirectory();
                 rows.add(new FileItem(c.getName(), c.getAbsolutePath(),
-                        dir ? "Folder" : formatSize(c.length()), dir, dir ? 0 : c.length()));
+                        dir ? "Folder" : FormatSizes.of(c.length()), dir, dir ? 0 : c.length()));
             }
         }
         adapter.submitList(rows);
         binding.emptyState.setVisibility(rows.isEmpty() ? View.VISIBLE : View.GONE);
         binding.fileList.setVisibility(rows.isEmpty() ? View.GONE : View.VISIBLE);
-    }
-
-    private static String formatSize(long bytes) {
-        if (bytes < 1024) return bytes + " B";
-        if (bytes < 1024 * 1024) return String.format(Locale.US, "%.1f KB", bytes / 1024.0);
-        if (bytes < 1024L * 1024 * 1024) return String.format(Locale.US, "%.1f MB", bytes / (1024.0 * 1024));
-        return String.format(Locale.US, "%.1f GB", bytes / (1024.0 * 1024 * 1024));
     }
 
     @Override
@@ -125,4 +123,3 @@ public class InternalFragment extends Fragment {
         binding = null;
     }
 }
-
