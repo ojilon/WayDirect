@@ -1,6 +1,11 @@
 package com.waydirect.utils;
 
-/** Shared human-readable size formatting — one place for all UI screens. */
+/**
+ * Shared human-readable size formatting — one place for all UI screens.
+ *
+ * <p>Use {@link #of(long)} from Fragments/adapters instead of a private
+ * {@code formatSize} copy. Keeps KB/MB/GB wording consistent.
+ */
 public final class FormatSizes {
     private FormatSizes() {}
 
