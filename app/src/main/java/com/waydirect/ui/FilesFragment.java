@@ -22,11 +22,13 @@ import com.waydirect.R;
 import com.waydirect.bridge.AppDirs;
 import com.waydirect.bridge.NativeCache;
 import com.waydirect.bridge.NativeEngine;
+import com.waydirect.bridge.RouteLogger;
 import com.waydirect.bridge.PathCache;
 import com.waydirect.bridge.PathRegistry;
 import com.waydirect.core.ThemePrefs;
 import com.waydirect.databinding.FragmentFilesBinding;
 import com.waydirect.storage.FileMutator;
+import com.waydirect.utils.FormatSizes;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -37,11 +39,14 @@ import java.util.List;
 
 /**
  * Files screen.
- * List/search via C++; create/rename/delete via FileMutator (shared).
- * Open routes through FileOpenHelper â†’ Image / Video / Document.
- * Left drawer includes Appearance â†’ Theme (System / Dark / Light).
+ * List/search via native; create/rename/delete via FileMutator (shared).
+ * Open routes through FileOpenHelper → Image / Video / Document / TextViewer.
+ * Left drawer: quick paths + Appearance → Theme (System / Dark / Light).
+ * Logging: RouteLogger under route "files".
  */
 public class FilesFragment extends Fragment {
+
+    private static final String ROUTE = "files";
 
     private static final int ACTION_LIST_FILES   = 3;
     private static final String SEARCH_JOB = "search";
@@ -72,12 +77,12 @@ public class FilesFragment extends Fragment {
         adapter.setOnItemClickListener(new FileAdapter.OnItemClickListener() {
             @Override
             public void onItemClick(FileItem item) {
-                if (item.isDirectory()) {
+                if (item.directory) {
                     showingSearchResults = false;
                     binding.searchResultsHeader.setVisibility(View.GONE);
-                    loadDirectory(item.getPath());
+                    loadDirectory(item.path);
                 } else {
-                    FileOpenHelper.open(requireContext(), item.getPath());
+                    FileOpenHelper.open(requireContext(), item.path);
                 }
             }
 
@@ -137,28 +142,28 @@ public class FilesFragment extends Fragment {
     }
 
     private void showItemOptions(FileItem item) {
-        final String[] options = item.isDirectory()
+        final String[] options = item.directory
                 ? new String[]{"Browse folder", "Rename", "Delete", "Cancel"}
                 : new String[]{"Open file", "Open parent folder", "Rename", "Delete", "Cancel"};
 
         new AlertDialog.Builder(requireContext())
-                .setTitle(item.getName())
+                .setTitle(item.name)
                 .setItems(options, (dialog, which) -> {
-                    if (item.isDirectory()) {
+                    if (item.directory) {
                         switch (which) {
                             case 0 -> {
                                 showingSearchResults = false;
                                 binding.searchResultsHeader.setVisibility(View.GONE);
-                                loadDirectory(item.getPath());
+                                loadDirectory(item.path);
                             }
                             case 1 -> promptRename(item);
                             case 2 -> confirmDelete(item);
                         }
                     } else {
                         switch (which) {
-                            case 0 -> FileOpenHelper.open(requireContext(), item.getPath());
+                            case 0 -> FileOpenHelper.open(requireContext(), item.path);
                             case 1 -> {
-                                String parent = item.getPath();
+                                String parent = item.path;
                                 int slash = parent.lastIndexOf('/');
                                 if (slash > 0) {
                                     showingSearchResults = false;
@@ -177,14 +182,14 @@ public class FilesFragment extends Fragment {
     private void promptRename(FileItem item) {
         final EditText input = new EditText(requireContext());
         input.setInputType(InputType.TYPE_CLASS_TEXT);
-        input.setText(item.getName());
+        input.setText(item.name);
 
         new AlertDialog.Builder(requireContext())
                 .setTitle("Rename")
                 .setView(input)
                 .setPositiveButton("Rename", (d, w) -> {
                     String newName = input.getText().toString().trim();
-                    FileMutator.Result r = FileMutator.rename(item.getPath(), newName);
+                    FileMutator.Result r = FileMutator.rename(item.path, newName);
                     Toast.makeText(getContext(), r.message, Toast.LENGTH_SHORT).show();
                     if (r.ok) loadDirectory(currentPath);
                 })
@@ -195,11 +200,11 @@ public class FilesFragment extends Fragment {
     private void confirmDelete(FileItem item) {
         new AlertDialog.Builder(requireContext())
                 .setTitle("Delete?")
-                .setMessage(item.getName() + (item.isDirectory()
+                .setMessage(item.name + (item.directory
                         ? "\n\nFolder and all contents will be removed."
                         : ""))
                 .setPositiveButton("Delete", (d, w) -> {
-                    FileMutator.Result r = FileMutator.delete(item.getPath());
+                    FileMutator.Result r = FileMutator.delete(item.path);
                     Toast.makeText(getContext(), r.message, Toast.LENGTH_SHORT).show();
                     if (r.ok) {
                         NativeCache.invalidateStatsSnapshot(getContext());
@@ -244,7 +249,7 @@ public class FilesFragment extends Fragment {
             } else if (id == R.id.nav_refresh) {
                 loadDirectory(currentPath);
             } else if (id == R.id.nav_external) {
-                Toast.makeText(getContext(), "External / SD â€“ coming soon", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), "External / SD – coming soon", Toast.LENGTH_SHORT).show();
             }
 
             binding.drawerLayout.closeDrawer(GravityCompat.START);
@@ -282,6 +287,7 @@ public class FilesFragment extends Fragment {
     }
 
     private void performSearch(String query) {
+        RouteLogger.step(requireContext(), ROUTE, "search", query);
         String dir = PathRegistry.moduleDir(getContext(), "search");
         if (dir.isEmpty()) {
             Toast.makeText(getContext(), "Storage not ready", Toast.LENGTH_SHORT).show();
@@ -294,7 +300,7 @@ public class FilesFragment extends Fragment {
         renderSearchFile(PathCache.previous(SEARCH_JOB), query, true);
 
         binding.searchResultsHeader.setVisibility(View.VISIBLE);
-        binding.searchResultsHeader.setText("Searchingâ€¦");
+        binding.searchResultsHeader.setText("Searching…");
         showEmpty(false);
 
         runSearch(query, out, true);
@@ -304,7 +310,7 @@ public class FilesFragment extends Fragment {
         NativeEngine.searchFilesAsync(currentPath, query, out, rawJson -> {
             if (binding == null) return;
             if ("busy".equals(PathCache.reason(rawJson))) {
-                // A scan is still running â€” retry once shortly; the user is
+                // A scan is still running — retry once shortly; the user is
                 // usually still typing, so this resolves on its own.
                 if (mayRetry) {
                     binding.searchResultsHeader.postDelayed(() -> {
@@ -364,7 +370,7 @@ public class FilesFragment extends Fragment {
                     result.add(new FileItem(
                             o.getString("name"),
                             o.getString("path"),
-                            isDir ? "Folder Â· exact match" : "File Â· exact match",
+                            isDir ? "Folder · exact match" : "File · exact match",
                             isDir,
                             0
                     ));
@@ -379,7 +385,7 @@ public class FilesFragment extends Fragment {
                     result.add(new FileItem(
                             o.getString("name"),
                             o.getString("path"),
-                            isDir ? "Folder Â· related" : "File Â· related",
+                            isDir ? "Folder · related" : "File · related",
                             isDir,
                             0
                     ));
@@ -393,6 +399,7 @@ public class FilesFragment extends Fragment {
     }
 
     private void loadDirectory(String path) {
+        RouteLogger.step(requireContext(), ROUTE, "loadDirectory", path);
         currentPath = path;
         BrowseSession.filesCurrentPath = path;
         binding.currentPath.setText(path);

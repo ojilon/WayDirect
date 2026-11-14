@@ -1,4 +1,4 @@
-// CleanerFragment.java â€” home of the file-cleaner utilities.
+// CleanerFragment.java — home of the file-cleaner utilities.
 // Today it hosts the duplicates scan directly; per TRANSFER_CLEANER_PLAN.md
 // it grows a card grid + sideways utility tabs (duplicates first).
 package com.waydirect.ui;
@@ -23,10 +23,12 @@ import com.waydirect.core.ThemePrefs;
 import com.waydirect.core.UiChrome;
 import com.waydirect.bridge.NativeCache;
 import com.waydirect.bridge.NativeEngine;
+import com.waydirect.bridge.RouteLogger;
 import com.waydirect.bridge.PathCache;
 import com.waydirect.bridge.PathRegistry;
 import com.waydirect.databinding.FragmentCleanerBinding;
 import com.waydirect.storage.FileMutator;
+import com.waydirect.utils.FormatSizes;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -36,6 +38,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class CleanerFragment extends Fragment {
+
+    private static final String ROUTE = "cleaner";
 
     private static final String ROOT = "/storage/emulated/0";
     private static final String DUPLICATES_JOB = "duplicates";
@@ -48,7 +52,7 @@ public class CleanerFragment extends Fragment {
     // related groups are display-only and never auto-deleted (see render below).
     private final List<List<DupEntry>> groups = new ArrayList<>();
     // Keep rule for theSuggested keeper: "newest" | "oldest" | "shortest".
-    // Change this constant (or wire to a spinner) â€” C++ stays unchanged.
+    // Change this constant (or wire to a spinner) — C++ stays unchanged.
     private String keepRule = "newest";
     private FileAdapter largeAdapter;
     private CleanerCardAdapter cardAdapter;
@@ -65,7 +69,7 @@ public class CleanerFragment extends Fragment {
         adapter.setOnItemClickListener(new FileAdapter.OnItemClickListener() {
             @Override
             public void onItemClick(FileItem item) {
-                FileOpenHelper.open(requireContext(), item.getPath());
+                FileOpenHelper.open(requireContext(), item.path);
             }
 
             @Override
@@ -89,7 +93,7 @@ public class CleanerFragment extends Fragment {
         largeAdapter.setOnItemClickListener(new FileAdapter.OnItemClickListener() {
             @Override
             public void onItemClick(FileItem item) {
-                FileOpenHelper.open(requireContext(), item.getPath());
+                FileOpenHelper.open(requireContext(), item.path);
             }
 
             @Override
@@ -104,6 +108,7 @@ public class CleanerFragment extends Fragment {
     }
 
     private void scan() {
+        RouteLogger.step(requireContext(), ROUTE, "scan_duplicates", ROOT);
         String dir = PathRegistry.moduleDir(getContext(), "cleaner");
         if (dir.isEmpty()) {
             binding.duplicatesEmpty.setText("Storage not ready");
@@ -113,7 +118,7 @@ public class CleanerFragment extends Fragment {
         String out = dir + "/duplicates.json";
         PathCache.remember(DUPLICATES_JOB, out);
 
-        binding.duplicatesEmpty.setText("Scanningâ€¦");
+        binding.duplicatesEmpty.setText("Scanning…");
         binding.duplicatesEmpty.setVisibility(View.VISIBLE);
 
         NativeEngine.findDuplicatesAsync(ROOT, out, rawJson -> {
@@ -165,13 +170,13 @@ public class CleanerFragment extends Fragment {
                             String name = e.path.substring(e.path.lastIndexOf('/') + 1);
                             String mark = (i == keeper) ? "KEEP? " : "Copy " + (i + 1) + " of " + entries.size();
                             flat.add(new FileItem(name, e.path,
-                                    mark + " Â· " + formatSize(e.size) + " Â· " + formatDate(e.mtime),
+                                    mark + " · " + FormatSizes.of(e.size) + " · " + formatDate(e.mtime),
                                     false, e.size));
                         }
                     }
                 }
                 // Related files: same normalized name, different versions.
-                // Display only â€” no keeper, no delete affordance beyond open.
+                // Display only — no keeper, no delete affordance beyond open.
                 JSONArray related = root.optJSONArray("related_groups");
                 if (related != null) {
                     for (int g = 0; g < related.length(); g++) {
@@ -189,8 +194,8 @@ public class CleanerFragment extends Fragment {
                             long mtime = o.optLong("mtime", 0);
                             String name = path.substring(path.lastIndexOf('/') + 1);
                             flat.add(new FileItem(name, path,
-                                    "Related to '" + key + "' Â· " + formatSize(size)
-                                            + " Â· " + formatDate(mtime) + " Â· review only",
+                                    "Related to '" + key + "' · " + FormatSizes.of(size)
+                                            + " · " + formatDate(mtime) + " · review only",
                                     false, size));
                         }
                     }
@@ -294,10 +299,10 @@ public class CleanerFragment extends Fragment {
     private void confirmDeleteOne(FileItem item) {
         new AlertDialog.Builder(requireContext())
                 .setTitle("Move this copy to holding?")
-                .setMessage(item.getPath() + "\nHeld 30 days under files/WayDirect/trash â€” not permanent.")
+                .setMessage(item.path + "\nHeld 30 days under files/WayDirect/trash — not permanent.")
                 .setPositiveButton("Move to holding", (d, w) -> {
                     String trashRoot = PathRegistry.root(requireContext()) + "/trash";
-                    FileMutator.Result r = FileMutator.moveToTrash(item.getPath(), trashRoot);
+                    FileMutator.Result r = FileMutator.moveToTrash(item.path, trashRoot);
                     Toast.makeText(getContext(), r.message, Toast.LENGTH_SHORT).show();
                     if (r.ok) {
                         NativeCache.invalidateStatsSnapshot(getContext());
@@ -309,6 +314,7 @@ public class CleanerFragment extends Fragment {
     }
 
     private void scanLargeFiles() {
+        RouteLogger.step(requireContext(), ROUTE, "scan_large", ROOT);
         String dir = PathRegistry.moduleDir(getContext(), "cleaner");
         if (dir.isEmpty()) {
             binding.largeFilesEmpty.setText("Storage not ready");
@@ -318,7 +324,7 @@ public class CleanerFragment extends Fragment {
         String out = dir + "/large-files.json";
         PathCache.remember(LARGE_JOB, out);
 
-        binding.largeFilesEmpty.setText("Scanningâ€¦");
+        binding.largeFilesEmpty.setText("Scanning…");
         binding.largeFilesEmpty.setVisibility(View.VISIBLE);
         binding.btnScanLarge.setEnabled(false);
 
@@ -351,7 +357,7 @@ public class CleanerFragment extends Fragment {
                     items.add(new FileItem(
                             o.getString("name"),
                             o.getString("path"),
-                            formatSize(size),
+                            FormatSizes.of(size),
                             false,
                             size
                     ));
@@ -363,7 +369,7 @@ public class CleanerFragment extends Fragment {
         }
 
         if (items.isEmpty()) {
-            binding.largeFilesEmpty.setText("No files â‰¥ " + formatSize(LARGE_MIN_BYTES));
+            binding.largeFilesEmpty.setText("No files ≥ " + FormatSizes.of(LARGE_MIN_BYTES));
             binding.largeFilesEmpty.setVisibility(View.VISIBLE);
             largeAdapter.submitList(null);
         } else {
@@ -379,20 +385,20 @@ public class CleanerFragment extends Fragment {
         for (List<DupEntry> group : groups) dupFiles += group.size();
         cardAdapter.setStatus(0, groups.isEmpty()
                 ? "No duplicates"
-                : groups.size() + " groups Â· " + dupFiles + " files");
+                : groups.size() + " groups · " + dupFiles + " files");
         int largeCount = largeAdapter != null ? largeAdapter.getItemCount() : 0;
         cardAdapter.setStatus(1, largeCount == 0
                 ? "Files over 10 MB"
-                : largeCount + " files â‰¥ 10 MB");
+                : largeCount + " files ≥ 10 MB");
     }
 
     private void confirmDeleteLarge(FileItem item) {
         new AlertDialog.Builder(requireContext())
                 .setTitle("Move large file to holding?")
-                .setMessage(item.getName() + "\n" + item.getDetails())
+                .setMessage(item.name + "\n" + item.details)
                 .setPositiveButton("Move to holding", (d, w) -> {
                     String trashRoot = PathRegistry.root(requireContext()) + "/trash";
-                    FileMutator.Result r = FileMutator.moveToTrash(item.getPath(), trashRoot);
+                    FileMutator.Result r = FileMutator.moveToTrash(item.path, trashRoot);
                     Toast.makeText(getContext(), r.message, Toast.LENGTH_SHORT).show();
                     if (r.ok) {
                         NativeCache.invalidateStatsSnapshot(getContext());
@@ -403,12 +409,6 @@ public class CleanerFragment extends Fragment {
                 .show();
     }
 
-    private static String formatSize(long bytes) {
-        if (bytes < 1024) return bytes + " B";
-        if (bytes < 1024 * 1024) return String.format("%.1f KB", bytes / 1024.0);
-        if (bytes < 1024L * 1024 * 1024) return String.format("%.1f MB", bytes / (1024.0 * 1024));
-        return String.format("%.1f GB", bytes / (1024.0 * 1024 * 1024));
-    }
 
     private static String formatDate(long mtimeUnix) {
         if (mtimeUnix <= 0) return "unknown date";
@@ -431,7 +431,7 @@ public class CleanerFragment extends Fragment {
         }
     }
 
-    /** Keeper suggestion only â€” user still confirms. shortest = shortest full path. */
+    /** Keeper suggestion only — user still confirms. shortest = shortest full path. */
     private static int pickKeeper(List<DupEntry> entries, String rule) {
         if (entries.isEmpty()) return 0;
         int best = 0;

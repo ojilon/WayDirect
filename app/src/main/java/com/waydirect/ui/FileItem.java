@@ -1,16 +1,26 @@
 package com.waydirect.ui;
 
 /**
- * Simple data class for one row in the Files list / search results.
- * Java only displays; C++ supplies the data via bulk JSON.
+ * One row in a file list (Files, Transfer search/browse, Cleaner, session queue).
+ *
+ * <p><b>OOP convention:</b> public final fields only — no getters.
+ * Build with the constructor; read {@code item.name} / {@code item.path} in adapters
+ * and click handlers. Do not add setters or mutate after construction.
+ *
+ * <p>Used with {@link FileAdapter} and {@code res/layout/item_file.xml}.
+ * See docs/APP_MAP.md.
  */
 public class FileItem {
 
-    private final String name;
-    private final String path;       // full path (needed for open / browse)
-    private final String details;    // e.g. "Folder" or "2.4 MB"
-    private final boolean directory;
-    private final long sizeBytes;    // 0 for folders
+    /** Display name (file or folder name only). */
+    public final String name;
+    /** Absolute path — open, browse, delete, upload. */
+    public final String path;
+    /** Secondary line, e.g. {@code "Folder"}, {@code "2.4 MB"}, status text. */
+    public final String details;
+    public final boolean directory;
+    /** Byte size for files; {@code 0} for folders / unknown. */
+    public final long sizeBytes;
 
     public FileItem(String name, String path, String details, boolean directory, long sizeBytes) {
         this.name = name;
@@ -19,25 +29,4 @@ public class FileItem {
         this.directory = directory;
         this.sizeBytes = sizeBytes;
     }
-
-    public String getName() {
-        return name;
-    }
-
-    public String getPath() {
-        return path;
-    }
-
-    public String getDetails() {
-        return details;
-    }
-
-    public boolean isDirectory() {
-        return directory;
-    }
-
-    public long getSizeBytes() {
-        return sizeBytes;
-    }
 }
-

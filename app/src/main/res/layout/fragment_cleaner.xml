@@ -55,7 +55,7 @@
         </LinearLayout>
 
         <!-- Sideways utility tabs. New utilities add one button here plus one
-             flipper child â€” nothing existing moves. -->
+             flipper child — nothing existing moves. -->
         <HorizontalScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -101,7 +101,7 @@
             android:layout_height="0dp"
             android:layout_weight="1">
 
-            <!-- 0 Â· Utilities home grid -->
+            <!-- 0 · Utilities home grid -->
             <ScrollView
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
@@ -130,7 +130,7 @@
                 </LinearLayout>
             </ScrollView>
 
-            <!-- 1 Â· Duplicates utility -->
+            <!-- 1 · Duplicates utility -->
             <ScrollView
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
@@ -179,13 +179,14 @@
                         style="@style/Widget.WayDirect.GlassButton"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:minHeight="@dimen/button_min_height"
                         android:layout_marginTop="@dimen/spacing_lg"
                         android:text="@string/btn_scan_duplicates" />
 
                 </LinearLayout>
             </ScrollView>
 
-            <!-- 2 Â· Large files utility -->
+            <!-- 2 · Large files utility -->
             <ScrollView
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
@@ -234,6 +235,7 @@
                         style="@style/Widget.WayDirect.GlassButton.Outlined"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:minHeight="@dimen/button_min_height"
                         android:layout_marginTop="@dimen/spacing_sm"
                         android:text="@string/btn_scan_large" />
 

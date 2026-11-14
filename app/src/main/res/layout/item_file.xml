@@ -1,12 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 
-<!-- Flat list row (D1): small corners, no stroke â€” rows separate by
-     spacing + surface contrast instead of reading as chunky buttons. -->
+<!--
+  item_file.xml — one list row for files/folders.
+
+  Inflated by: FileAdapter.onCreateViewHolder (R.layout.item_file).
+  Data filled by: FileAdapter.onBindViewHolder from FileItem public fields.
+
+  Id → Java (ViewHolder):
+    file_icon     → icon (drawable from extension)
+    file_name     → item.name
+    file_details  → item.details
+    row_checkbox  → multi-select (Transfer); usually GONE
+
+  Clicks are NOT in XML — FileAdapter sets OnClickListener on the row root.
+  Tokens: dimens (spacing/radius/list_item_height), colors (waydirect_*).
+-->
 <com.google.android.material.card.MaterialCardView
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:minHeight="@dimen/list_item_height"
     android:layout_marginStart="@dimen/spacing_sm"
     android:layout_marginEnd="@dimen/spacing_sm"
     android:layout_marginTop="2dp"
@@ -75,4 +89,3 @@
     </LinearLayout>
 
 </com.google.android.material.card.MaterialCardView>
-

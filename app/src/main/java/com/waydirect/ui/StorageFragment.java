@@ -10,18 +10,38 @@ import androidx.annotation.NonNull;
 import androidx.core.view.GravityCompat;
 import androidx.fragment.app.Fragment;
 
+import com.waydirect.bridge.RouteLogger;
+import com.waydirect.bridge.Stats;           // requestSnapshot → native / cache
+import com.waydirect.bridge.StatsSnapshot;   // parse JSON into typed fields
 import com.waydirect.core.GlassBlur;
-import com.waydirect.bridge.Stats;
 import com.waydirect.core.ThemePrefs;
 import com.waydirect.core.UiChrome;
-import com.waydirect.databinding.FragmentStorageBinding;
-import com.waydirect.bridge.StatsSnapshot;
+import com.waydirect.databinding.FragmentStorageBinding; // fragment_storage.xml
+import com.waydirect.utils.FormatSizes;
 
-import org.json.JSONException;
 import org.json.JSONObject;
 
+/**
+ * Storage tab — usage summary, free space, category sizes, ring chart.
+ *
+ * <h3>Call route</h3>
+ * <pre>
+ * onCreateView / btnRefresh
+ *   → loadStats(force)
+ *   → Stats.requestSnapshot(ctx, force, this::handleStatsResult)
+ *   → (bridge may hit cache or native)
+ *   → handleStatsResult(rawJson)
+ *        → StatsSnapshot.parse → binding text + storageRing
+ * </pre>
+ * The callback carries a JSON string. We convert it to {@link StatsSnapshot}
+ * (plain fields: usedBytes, images, …) then write human text with {@link FormatSizes}.
+ *
+ * <p>Errors: show the real {@code reason}/{@code error} from JSON on the summary line
+ * (not a silent generic failure). Logs go to {@code logs/storage/}.
+ */
 public class StorageFragment extends Fragment {
 
+    private static final String ROUTE = "storage";
     private FragmentStorageBinding binding;
 
     @Override
@@ -29,7 +49,7 @@ public class StorageFragment extends Fragment {
         binding = FragmentStorageBinding.inflate(inflater, container, false);
         setupButtons();
         setupSidebar();
-        loadStats();
+        loadStats(false);
         return binding.getRoot();
     }
 
@@ -80,63 +100,83 @@ public class StorageFragment extends Fragment {
         binding.btnRefreshStorage.setOnClickListener(v -> loadStats(true));
     }
 
-    private void loadStats() {
-        loadStats(false);
-    }
-
     private void loadStats(boolean force) {
-        binding.storageSummary.setText("Calculatingâ€¦");
+        binding.storageSummary.setText("Calculating…");
+        RouteLogger.step(requireContext(), ROUTE, "ui_loadStats", "force=" + force);
+        // Callback = handleStatsResult(String rawJson) on whatever thread Stats uses
         Stats.requestSnapshot(getContext(), force, this::handleStatsResult);
     }
 
+    /** Receives raw JSON from Stats; updates all summary TextViews + ring. */
     private void handleStatsResult(String rawJson) {
         if (binding == null) return;
         try {
-            StatsSnapshot s = StatsSnapshot.parse(rawJson);
-    
-            binding.storageSummary.setText(formatSize(s.usedBytes) + " used of " + formatSize(s.totalBytes));
-            binding.storageFree.setText(formatSize(s.freeBytes) + " free");
-    
-            if (binding.catImages != null) binding.catImages.setText(formatSize(s.images));
-            if (binding.catVideos != null) binding.catVideos.setText(formatSize(s.videos));
-            if (binding.catAudio != null) binding.catAudio.setText(formatSize(s.audio));
-            if (binding.catDocuments != null) binding.catDocuments.setText(formatSize(s.documents));
-            if (binding.catSystem != null) binding.catSystem.setText(formatSize(s.system));
-            if (binding.catOthers != null) binding.catOthers.setText(formatSize(s.others));
-            // foreign if you still show it:
-            // if (binding.catForeign != null) binding.catForeign.setText(formatSize(s.foreign));
-    
-            if (binding.catTotal != null) {
-                binding.catTotal.setText(formatSize(s.categoriesTotal()));
+            if (rawJson != null && (rawJson.contains("\"error\"") || looksLikeErrorStatus(rawJson))) {
+                String reason = extractReason(rawJson);
+                RouteLogger.error(requireContext(), ROUTE, "ui_error " + reason);
+                binding.storageSummary.setText("Storage unavailable: " + reason);
+                binding.storageFree.setText("Pull refresh or check Internals → logs/storage");
+                return;
             }
-    
+
+            StatsSnapshot s = StatsSnapshot.parse(rawJson);
+
+            binding.storageSummary.setText(FormatSizes.of(s.usedBytes) + " used of " + FormatSizes.of(s.totalBytes));
+            binding.storageFree.setText(FormatSizes.of(s.freeBytes) + " free");
+
+            if (binding.catImages != null) binding.catImages.setText(FormatSizes.of(s.images));
+            if (binding.catVideos != null) binding.catVideos.setText(FormatSizes.of(s.videos));
+            if (binding.catAudio != null) binding.catAudio.setText(FormatSizes.of(s.audio));
+            if (binding.catDocuments != null) binding.catDocuments.setText(FormatSizes.of(s.documents));
+            if (binding.catSystem != null) binding.catSystem.setText(FormatSizes.of(s.system));
+            if (binding.catOthers != null) binding.catOthers.setText(FormatSizes.of(s.others));
+
+            if (binding.catTotal != null) {
+                binding.catTotal.setText(FormatSizes.of(s.categoriesTotal()));
+            }
+
             if (binding.storageRing != null) {
                 binding.storageRing.setCategoryBytes(
                         s.images, s.videos, s.audio, s.documents, s.system, s.others);
             }
+            RouteLogger.step(requireContext(), ROUTE, "ui_ok", "used=" + s.usedBytes);
         } catch (Exception e) {
-            e.printStackTrace();
-            binding.storageSummary.setText("Failed to load storage data");
+            RouteLogger.error(requireContext(), ROUTE, "ui_parse " + e.getMessage() + " raw=" + truncate(rawJson, 200));
+            String reason = extractReason(rawJson);
+            if (reason.isEmpty()) reason = e.getMessage() != null ? e.getMessage() : "parse_error";
+            binding.storageSummary.setText("Storage error: " + reason);
+            binding.storageFree.setText("See logs/storage for details");
         }
     }
 
-
-    private void setWeight(View view, long value, long total) {
-        ViewGroup.LayoutParams lp = view.getLayoutParams();
-        if (lp instanceof android.widget.LinearLayout.LayoutParams) {
-            android.widget.LinearLayout.LayoutParams llp =
-                    (android.widget.LinearLayout.LayoutParams) lp;
-            float w = value <= 0 ? 0.02f : (float) value / (float) total;
-            llp.weight = w;
-            view.setLayoutParams(llp);
+    private static boolean looksLikeErrorStatus(String json) {
+        try {
+            JSONObject o = new JSONObject(json);
+            String status = o.optString("status", "");
+            return "error".equalsIgnoreCase(status);
+        } catch (Exception e) {
+            return false;
         }
     }
 
-    private String formatSize(long bytes) {
-        if (bytes < 1024) return bytes + " B";
-        if (bytes < 1024 * 1024) return String.format("%.1f KB", bytes / 1024.0);
-        if (bytes < 1024L * 1024 * 1024) return String.format("%.1f MB", bytes / (1024.0 * 1024));
-        return String.format("%.1f GB", bytes / (1024.0 * 1024 * 1024));
+    /** Pull error / reason / status from native JSON when present. */
+    private static String extractReason(String json) {
+        if (json == null || json.isEmpty()) return "empty_response";
+        try {
+            JSONObject o = new JSONObject(json);
+            if (o.has("reason")) return o.optString("reason", "error");
+            if (o.has("error")) return o.optString("error", "error");
+            if ("error".equalsIgnoreCase(o.optString("status", ""))) {
+                return o.optString("message", "status_error");
+            }
+        } catch (Exception ignored) {
+        }
+        return "";
+    }
+
+    private static String truncate(String s, int max) {
+        if (s == null) return "null";
+        return s.length() <= max ? s : s.substring(0, max) + "…";
     }
 
     @Override
@@ -145,4 +185,3 @@ public class StorageFragment extends Fragment {
         binding = null;
     }
 }
-
