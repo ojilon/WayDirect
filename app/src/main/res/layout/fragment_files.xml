@@ -1,5 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 
+<!--
+  fragment_files.xml — Files tab shell.
+
+  Owned by: FilesFragment (FragmentFilesBinding).
+  List rows: FileAdapter + item_file.xml inside @id/file_list.
+
+  Important ids (Java listeners / text):
+    drawer_layout, btn_open_drawer, left_drawer  → navigation drawer
+    search_input / search_layout                 → live search (IME actionSearch)
+    current_path, btn_files_up                   → path bar + parent folder
+    search_results_header                        → shown only while search results
+    file_list                                    → RecyclerView of FileItems
+    fab_new_folder                               → create folder shortcut
+    empty_state                                  → visible when list is empty
+
+  Runtime: FilesFragment.loadDirectory → native list JSON → FileItem list → adapter.
+  Open file → FileOpenHelper; mutations → FileMutator.
+  See docs/APP_MAP.md and docs/XML_UI_GUIDE.md.
+-->
 <androidx.drawerlayout.widget.DrawerLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
